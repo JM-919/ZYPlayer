@@ -1,4 +1,20 @@
 
+## 2026-10-07 赞助页放入两张真实打赏码(微信①②)
+
+* 用户把两张图放到 `web/site/`(实为 JPEG, 文件名是 `1000001073.png` / `1000001087.png`);
+  我看过图确认**两张都是微信收款码**(收款人分别为「今昔依惜(*娟)」与「一转身一辈子(**瑞)」),
+  **没有支付宝码** —— 所以标签按实际内容写「微信 · 自愿打赏 ①/②」, 不瞎标成支付宝;
+* 收进工程并用**按真实格式**的后缀命名: `sponsor1.jpg` / `sponsor2.jpg`, 同时放进
+  `pikachu-dl/android/assets/`(进 APK)与 `web/site/`(进网页产物); 两个 `.svg` 占位图同步改名;
+* 槽位改成 `sponsor1.* / sponsor2.*`; `<img>` 取图顺序 **jpg → png → jpeg → webp → svg**;
+  `web/build-web.mjs` 的 `SPA_FILES`/`SPA_OPTIONAL` 同步;
+* `pikachu-dl/tools/put_sponsor_qr.sh` 也改成两槽位用法:
+  `bash pikachu-dl/tools/put_sponsor_qr.sh 图1 图2 --build`;
+* **免责/打赏声明一字未减**(打赏赞助不是购买、不涉及付费购买、不换取任何功能、全部功能免费、量力而行),
+  位置仍在两张码**之上**;
+* 验证: 线上 `sponsor1.jpg` / `sponsor2.jpg` 与本地 dist **md5 一致**且是真 JPEG;
+  APK 重建 795,963 字节, 两张码与占位图都在包内; `uicheck`/`csscheck`/`selftest` 全绿。
+
 ## 2026-10-07 界面: 首页「继续观看」收进历史记录 + 新增「赞助福利」
 
 * 首页那块「继续观看」**不再单独显示**(分享界面改动, 两端一致), 入口收到右上角;

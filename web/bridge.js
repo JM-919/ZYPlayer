@@ -815,6 +815,12 @@
     if (root.document) root.document.addEventListener('visibilitychange', function () {
       if (!root.document.hidden) checkBuild();
     });
+    // ★ 关键补漏: 从"后退/前进缓存(BFCache)"恢复的页面**既不走网络、也不触发 visibilitychange** ——
+    //   用户切回标签页看到的就是改动前的旧界面。这正是"我明明改了, 网页端却没生效"的最常见成因:
+    //   服务端已经是新版(md5 一致), 用户屏幕上还是旧副本。pageshow.persisted 就是"从缓存恢复"的信号。
+    root.addEventListener('pageshow', function (e) {
+      if (e && e.persisted) checkBuild();
+    });
   } catch (e) {}
 
   /* 详情页"封面做背景虚化": 皮肤里有 html.web body::after 用 --z-poster 做一层模糊背景。
