@@ -101,6 +101,17 @@
   .eps button.cur{background:var(--grn);color:#07120a;}
   .tag{display:inline-block;font-size:11px;padding:1px 8px;border-radius:99px;background:var(--g1);color:var(--dim);
     margin-right:6px;border:1px solid var(--hair);}
+  /* 赞助福利页: 两张收款码并排(窄屏自动换行), 收款码上方是打赏说明 */
+  .sponsornote{margin:2px 0 14px;padding:12px 14px;border-radius:12px;line-height:1.6;font-size:13px;
+    background:var(--g1);border:1px solid var(--hair);color:var(--fg);}
+  .sponsornote b{color:var(--gold);}
+  .sponsorwrap{display:flex;flex-wrap:wrap;gap:14px;}
+  .sponsorcard{flex:0 1 240px;min-width:0;text-align:center;padding:12px;border-radius:14px;
+    background:var(--card);border:1px solid var(--hair);}
+  .spq{display:block;width:100%;max-width:240px;margin:0 auto;border-radius:10px;background:#fff;padding:6px;}
+  .spqcap{margin-top:8px;font-size:13px;color:var(--dim);}
+  .sponsorhowto{margin-top:14px;font-size:12px;line-height:1.6;}
+  .sponsorhowto code{background:rgba(255,255,255,.08);padding:1px 5px;border-radius:5px;font-size:11px;}
   /* ================= 网页端自适应(照静态博客的做法) =================
      参考用户自己的博客(felixdsh2.eu.cc): 文档自然滚动 + 容器限宽(~1080px) +
      流式网格 repeat(auto-fill, minmax(...)) + 断点 560 / 720 / 880 / 1180。
@@ -139,7 +150,7 @@
   html.web #dbboards .bmore{grid-column:1/-1;margin-top:2px;padding:8px 6px;border-radius:10px;
     background:transparent;color:var(--dim);border:1px dashed var(--hair);font-size:12px;cursor:pointer;}
   html.web #dbboards .bmore:hover{color:var(--fg);border-color:rgba(255,255,255,.28);}
-  html.web button,html.web .item,html.web .hlist .item,html.web input,html.web select{cursor:pointer;}
+  html.web button,html.web .item,html.web input,html.web select{cursor:pointer;}
   html.web .item{transition:transform .15s ease, box-shadow .15s ease;}
   html.web .item:hover{transform:translateY(-2px);}
   /* 播放器控制栏: **窄屏一律沿用 App 自己的 12px**(百分比内边距会把按钮挤出屏幕);
@@ -416,17 +427,6 @@
     padding:7px 9px;font-size:14px;text-align:center;}
   #pskip .dim{color:#7c8798;}
   #pskipbtn.on{background:rgba(77,163,255,.3);color:#bcdcff;}
-  /* ==== 继续观看 ==== */
-  .hlist{display:flex;gap:10px;overflow-x:auto;padding:2px 0 8px;}
-  .hcard{flex:0 0 132px;background:var(--g1);border:1px solid var(--hair);border-radius:14px;
-    padding:8px;cursor:pointer;-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);
-    box-shadow:var(--sh);}
-  .hcard:active{transform:scale(.97);}
-  .hcard .hn{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .hcard .he{font-size:11px;color:#8ff0b4;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .hcard .hp{font-size:11px;color:var(--dim);margin-top:2px;}
-  .hcard .hb{height:3px;border-radius:99px;background:#2a3342;margin-top:6px;overflow:hidden;}
-  .hcard .hb i{display:block;height:100%;background:var(--grn);}
   .sec{display:flex;align-items:center;}
   /* 观看记录管理: 一行一条玻璃卡, 左边勾选, 右边删除 */
   .hrow{display:flex;align-items:center;gap:10px;background:var(--g1);border:1px solid var(--hair);
@@ -515,7 +515,8 @@
     <div id="navScroll">
       <!-- 顶栏「搜索」按钮已按用户要求删除(截图上标的就是它): 搜索页从**主页搜索框回车**或
            详情页的「搜索」按钮进。函数 openSearch() 保留(规范入口: 进搜索页并聚焦输入框)。 -->
-      <button class="ghost mini" onclick="openHistory()">记录</button>
+      <button class="ghost mini" onclick="openHistory()">历史记录</button>
+      <button class="ghost mini" onclick="openSponsor()">赞助福利</button>
       <button class="ghost mini" onclick="showLive()">直播</button>
       <button class="ghost mini" onclick="showDecrypt()">解密</button>
       <button class="ghost mini" onclick="showUpdate()">更新</button>
@@ -528,10 +529,6 @@
            原来那个「搜索」按钮是冗余的, 已按用户要求删除; 函数 searchFromHome 保留 —— 回车链路还在用它。 -->
       <div class="bar"><input id="kwHome" type="search" enterkeyhint="search" placeholder="搜片名 / 演员, 直接开搜" autocomplete="off" oninput="kwHomePreview()" onkeydown="searchEnter(event,'home')" onkeyup="searchEnter(event,'home')" /></div>
       <div class="kwprev" id="kwHomePrev"></div>
-      <div id="histWrap" style="display:none">
-        <div class="sec">继续观看 <span class="dim" onclick="openHistory()" style="float:right;font-weight:400;font-size:12px;color:#7cc4ff">管理 &rsaquo;</span></div>
-        <div class="hlist" id="histList"></div>
-      </div>
       <div class="bar">
         <select id="typeSel" onchange="reloadHome()">
           <option value="">最新更新</option>
@@ -593,6 +590,36 @@
         <button class="ghost mini" onclick="PK.clearDiag();show('v-home')">清空</button>
       </div>
       <div class="titem"><div id="crashText" class="tpath" style="white-space:pre-wrap"></div></div>
+    </section>
+
+    <!-- 赞助福利: 两张收款码(纯打赏, 与任何功能/内容无关; 二维码上方是必须保留的说明) -->
+    <section id="v-sponsor" style="display:none">
+      <div class="bar">
+        <button class="ghost mini" onclick="goHome()">&lsaquo; 首页</button>
+        <span class="tag">赞助福利</span>
+        <div class="grow"></div>
+      </div>
+      <div class="sponsornote">
+        <b>这是「打赏赞助」，不是购买。</b>下面的收款码仅用于自愿打赏、支持本项目的开发与服务器开销，
+        <b>不涉及任何付费购买</b>：不是充值、不是会员、不是订阅，也<b>不换取</b>任何内容、功能、去广告或服务承诺。
+        本应用与网页版的全部功能始终免费开放，赞助与否、金额多少都不影响你能看什么、能用什么。请量力而行。
+      </div>
+      <div class="sponsorwrap">
+        <div class="sponsorcard">
+          <img class="spq" src="sponsor_alipay.png" alt="支付宝打赏码" onerror="sponsorQrNext(this)" />
+          <div class="spqcap">支付宝 · 自愿打赏</div>
+        </div>
+        <div class="sponsorcard">
+          <img class="spq" src="sponsor_wechat.png" alt="微信打赏码" onerror="sponsorQrNext(this)" />
+          <div class="spqcap">微信 · 自愿打赏</div>
+        </div>
+      </div>
+      <div class="dim sponsorhowto">
+        收款码是站点所有者自己放的：把真实收款码存成 <code>sponsor_alipay.&lt;后缀&gt;</code> /
+        <code>sponsor_wechat.&lt;后缀&gt;</code>（<b>png / jpg / jpeg / webp 都认</b>），放进界面同一目录
+        （安卓端 <code>pikachu-dl/android/assets/</code>，网页版 <code>web/site/</code>）即自动替换，
+        不用改代码；一个都没放才显示上面这张占位图。
+      </div>
     </section>
 
     <!-- 观看记录管理 -->

@@ -1,4 +1,14 @@
 
+## 2026-10-07 界面: 首页「继续观看」收进历史记录 + 新增「赞助福利」
+
+* 首页那块「继续观看」**不再单独显示**(分享界面改动, 两端一致), 入口收到右上角;
+* 「记录」→ **「历史记录」**;其后新增 **「赞助福利」** 页(`#v-sponsor` / `openSponsor()`);
+* 赞助页两张收款码是**占位图**(`sponsor_alipay.svg` / `sponsor_wechat.svg`), 收款码**上方**是
+  必须保留的说明: 打赏赞助、**不涉及任何付费购买**、不换取任何功能、全部功能始终免费、请量力而行;
+* 站点所有者放真实收款码: 存成 `web/site/sponsor_alipay.png` / `sponsor_wechat.png`
+  (`web/build-web.mjs` 的 `SPA_OPTIONAL` 会带上, `<img>` 优先 png、失败回落 svg 占位图);
+* 线上已部署并核对(含两张 svg 的 md5); 顺手删掉首页卡片那套死样式与死函数 `renderHistory()`。
+
 ## 2026-10-07 收起态改成一排四个 + 修「静默提示」开关显示反了 + CI 加固
 
 **① 收起态布局(按用户要求)**: 固定 4 列 —— `正在上映 / 热门剧集 / 综艺 / 纪录片` 同排;
@@ -19,9 +29,19 @@ CSS 用 `#dbboards.collapsed{grid-template-columns:repeat(4,minmax(0,1fr))}` —
 GitHub Pages 那套改成**显式开启**(`ENABLE_GH_PAGES=true` 才跑) —— 它是备用通道,
 线上用的是 Cloudflare Worker, 不该因为没开 Pages 就让每次运行都是红的。
 
-**注意**: 本轮改动已部署到线上(Cloudflare Worker), 但**还没推到 GitHub** —— 手上的 GitHub 令牌
-只能读不能写(推送被拒: Invalid username or token)。仓库同步已备好(含删掉 `web/relay`),
-需要一个有 `Contents: write` 的 PAT 才能推。
+**④ 已推上 GitHub 并确认 CI 变绿**: 提交 `f8798a3` → run **#131 success**
+(环境信息 / selftest / 组装 / 打包 / Pages 工件 全绿, CF 部署按设计 skipped, Pages job 按设计 skipped)。
+同时删掉了仓库里已经下线的 `web/relay/`。
+
+**⑤ 那次失败的真正原因(从 GitHub 日志里挖出来的, 不是猜的)**: 失败的是 run **#2~#6**,
+断在 `actions/configure-pages@v5` 这一步:
+
+    ##[error]Create Pages site failed. Error: Resource not accessible by integration
+
+即"仓库还没开 Pages, 而构建用的 GITHUB_TOKEN 没有创建 Pages 站点的权限" —— 跟代码/构建毫无关系。
+现在这条链路改成了: 构建 job 只负责构建 + 传产物(工件上传也非致命), Pages 发布单独一个 job 且
+**要显式 `ENABLE_GH_PAGES=true` 才跑**(它自己有 `pages: write` + `id-token: write` 权限)。
+以后要用 Pages: 仓库 Settings → Pages → Source 选 "GitHub Actions", 再把变量 `ENABLE_GH_PAGES` 设为 true。
 
 ### 追加: 面板改成"默认折叠"
 

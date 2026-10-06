@@ -744,7 +744,7 @@ function histSetKeep(v){
     var a = histArr();
     if (a.length > n) { histStore(a.slice(0, n)); histSel = {}; PK.toast('已按设置清理到 ' + n + ' 条'); }
   }
-  renderHistory(); renderHistoryFull();
+  renderHistoryFull();
 }
 function ago(ts){
   if (!ts) return '';
@@ -834,9 +834,29 @@ function clearHistory(){
   if (n > 1 && !confirm('确定清空全部 ' + n + ' 条观看记录？')) return;
   try { localStorage.removeItem('pk_hist'); } catch(e){}
   histSel = {};
-  renderHistory(); renderHistoryFull();
+  renderHistoryFull();
   PK.toast('已清空 ' + n + ' 条观看记录');
 }
+/* ---------- 赞助福利页(纯打赏, 见 index.html 里那段必须保留的说明) ---------- */
+function openSponsor(){
+  show('v-sponsor');
+}
+/**
+ * 收款码取图: 依次试 png → jpg → jpeg → webp → svg(占位图)。
+ * 站点所有者只要把图存成 sponsor_alipay.* / sponsor_wechat.* 丢进 assets 目录就行,
+ * 不用管后缀、也不用改代码 —— <img> 加载失败时本函数换下一个候选, 最后一定落到 svg 占位图。
+ */
+function sponsorQrNext(img){
+  try {
+    var src = String((img && img.getAttribute('src')) || '');
+    var base = src.indexOf('wechat') >= 0 ? 'sponsor_wechat' : 'sponsor_alipay';
+    var list = ['png', 'jpg', 'jpeg', 'webp', 'svg'];
+    var n = parseInt(img.getAttribute('data-i') || '0', 10) + 1;
+    img.setAttribute('data-i', String(n));
+    if (n < list.length) img.src = base + '.' + list[n];
+  } catch (e) {}
+}
+
 /* ---------- 观看记录管理页 ---------- */
 function openHistory(){
   show('v-hist');
@@ -863,7 +883,7 @@ function histDeleteOne(i){
   a.splice(i, 1);
   histStoreRaw(a);
   histSel = {};
-  renderHistory(); renderHistoryFull();
+  renderHistoryFull();
   PK.toast('已删除: ' + name);
 }
 function histDeleteSelected(){
@@ -872,7 +892,7 @@ function histDeleteSelected(){
   for (var i = 0; i < idx.length; i++) a.splice(idx[i], 1);
   histStoreRaw(a);
   histSel = {};
-  renderHistory(); renderHistoryFull();
+  renderHistoryFull();
   PK.toast('已删除 ' + idx.length + ' 条');
 }
 /** 不走「保留 N 条」的收尾, 删除是精确操作 */
@@ -907,24 +927,6 @@ function renderHistoryFull(){
       + '<div class="bar2"><i style="width:' + pct + '%"></i></div></div>'
       + '<button class="del" onclick="histDeleteOne(' + i + ')">删除</button>'
       + '</div>';
-  }
-  box.innerHTML = h;
-}
-function renderHistory(){
-  var wrap = document.getElementById('histWrap'), box = document.getElementById('histList');
-  if (!wrap || !box) return;
-  var a = histArr();
-  if (!a.length) { wrap.style.display = 'none'; box.innerHTML = ''; return; }
-  wrap.style.display = 'block';
-  var h = '';
-  for (var i = 0; i < a.length && i < 12; i++) {
-    var r = a[i];
-    var pct = (r.dur > 0) ? Math.min(100, Math.round((r.pos || 0) * 100 / r.dur)) : 0;
-    h += '<div class="hcard" onclick="resumeWatch(' + i + ')">'
-      + '<div class="hn">' + esc(r.name) + '</div>'
-      + '<div class="he">' + esc(r.epName || ('第 ' + ((r.epIdx || 0) + 1) + ' 集')) + '</div>'
-      + '<div class="hp">' + fmt(r.pos || 0) + (r.dur ? (' / ' + fmt(r.dur)) : '') + ' · ' + esc(r.siteName || '') + '</div>'
-      + '<div class="hb"><i style="width:' + pct + '%"></i></div></div>';
   }
   box.innerHTML = h;
 }
@@ -1076,7 +1078,6 @@ function applySkip(){
   }
 }
 function initSkipAndHistory(){
-  renderHistory();
 }
 
 /* ---------- 屏幕锁定 ---------- */
@@ -1626,7 +1627,6 @@ function closePlayer(){
   var _pc = document.getElementById('pcast'); if (_pc) _pc.className = '';
   var _pl = document.getElementById('player'); if (_pl) _pl.className = ('' + _pl.className).replace(/\s*locked/, '');
   try { histTick(); } catch(e){}
-  renderHistory();
   var v = document.getElementById('video');
   try { v.pause(); } catch(e){}
   if (hls) { try { hls.destroy(); } catch(e){} hls = null; }
@@ -1709,7 +1709,6 @@ function goHome(){
   allResults = []; searchItems = []; curSrcFilter = "";
   lastMainView = "v-home";
   show("v-home");
-  renderHistory();
   if (homeItems && homeItems.length) renderGrid(document.getElementById("homeGrid"), homeItems, 0, "home");
   else reloadHome();
 }
