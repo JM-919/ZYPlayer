@@ -2760,6 +2760,7 @@ function codecSupported(){
  */
 var liveSwitchAt = 0, liveSwitchN = 0, liveSwitchFrom = 0;
 function liveNextLine(reason){
+  if (isWeb()) return;                     // 网页版不做直播(入口已移除); 函数体留给安卓端
   if (!curItem || !curItem.live || !curItem.eps || !curItem.eps.length) return;
   var now = Date.now();
   if (now - liveSwitchFrom > 60000) { liveSwitchN = 0; liveSwitchFrom = now; }
@@ -3085,6 +3086,7 @@ function liveAllChannels(){
 }
 /** 换台: dir=+1 下一台 / -1 上一台; 跨分组(参考 TVBox 的 live_cross_group) */
 function liveZap(dir){
+  if (isWeb()) return;                     // 网页版不做直播(入口已移除); 函数体留给安卓端
   var name = curItem ? curItem.name : '';
   var all = (PS.cross || liveFind) ? liveAllChannels() : null;
   if (!all || !all.length) {
@@ -3108,11 +3110,13 @@ function liveZap(dir){
 function liveZapNext(){ liveZap(1); }
 function liveZapPrev(){ liveZap(-1); }
 function showLive(){
+  if (isWeb()) return;                     // 网页版不做直播(入口已移除); 函数体留给安卓端
   show('v-live');
   renderLiveFromCache();                  // 先把缓存画出来, 页面立刻有东西
   try { PK.liveAuto(); } catch(e){}       // 顺手在后台检查/更新(用户不用点任何东西)
 }
 function renderLiveFromCache(){
+  if (isWeb()) return;                     // 网页版不做直播(入口已移除); 函数体留给安卓端
   var meta = null, tag = document.getElementById('liveMeta');
   try { meta = JSON.parse(PK.liveMeta()); } catch(e){}
   var gs = (meta && meta.groups) || [];
@@ -3223,6 +3227,7 @@ function renderLiveChannels(group){
 /** 点频道 = 先探活它那几条线(并发, 很快), 通了的那条直接播; 探完的结果会缓存 6 小时 */
 var liveWait = {}, liveSeq = 0;
 function playLive(i, obj){
+  if (isWeb()) return;                     // 网页版不做直播(入口已移除); 函数体留给安卓端
   var c = obj || liveCur[i];
   if (!c || !c.u || !c.u.length) return;
   liveLastSet(c.n, c.g || liveGroup);        // 记"上次看的频道"(参考 TVBox 的 last_live_channel_name)
@@ -3258,6 +3263,7 @@ function playLive(i, obj){
   catch(e){ onLiveProbe(id, '[]'); }
 }
 function onLiveProbe(id, json){
+  if (isWeb()) return;                     // 网页版不做直播(入口已移除); 函数体留给安卓端
   var w = liveWait[id];
   if (!w) return;
   // 归属校验: 探活要 1~4 秒, 期间用户可能已经点了别的频道 —— 那时这份结果不能抢画面
@@ -3287,6 +3293,7 @@ function onLiveProbe(id, json){
  * 还在等画面就立刻换到实测能播的那条; 已经有画面了就不动它, 只把标记补上。
  */
 function onLiveDeep(id, json){
+  if (isWeb()) return;                     // 网页版不做直播(入口已移除); 函数体留给安卓端
   var w = liveWait[id];
   delete liveWait[id];                        // 无论后面怎么返回都要清掉, 否则这个表会越积越多
   if (!w) return;
@@ -3337,6 +3344,7 @@ function openExternal(){
 function onExternalFail(msg){ try { PK.toast('没打开: ' + msg); } catch(e){} }
 /** 用现有播放器播一个直播频道(多条线路进「选集」, 播不动就自动换下一条) */
 function startLiveChannel(name, urls, probe, okN, id){
+  if (isWeb()) return;                     // 网页版不做直播(入口已移除); 函数体留给安卓端
   curItem = { name: name, siteName: '直播', site: 'live', live: true, liveTry: 0, eps: [], liveOrig: [] };
   var info = probe || [];
   var byUrl = {};
@@ -3829,9 +3837,22 @@ function applyWebMode(){
   // 帮助函数: 抽屉/页面**只隐藏不删节点** —— show()/closeSheets() 会把它们列进去循环设置样式,
   // 节点没了就是 null 访问异常, 整个导航会跟着坏(这是"越界改坏"的典型, 特意记一笔)
   function hide(el){ try { if (el) el.style.display = 'none'; } catch(e){} }
-  // ① 只有原生做得到的入口: 投屏 / 解析 / 更新
+  // ① 只有原生做得到的入口: 投屏 / 解析 / 更新 / **直播(网页版整体不做直播)**
   drop($('pcastbtn')); drop($('pvipbtn'));
   hide($('pcast')); hide($('pvip'));
+  try {
+    var nav0 = document.querySelectorAll('#navScroll button');
+    for (var i0 = 0; i0 < nav0.length; i0++) if (/直播/.test(nav0[i0].textContent || '')) drop(nav0[i0]);
+  } catch(e){}
+  hide($('v-live'));                                     // 页面留着(show() 要按 id 取), 只是永远进不去
+  try { var vl = $('v-live'); if (vl) vl.innerHTML = ''; } catch(e){}
+  // 播放器设置里与直播有关的几行: 跨分组换台 / 频道倒序 / 清空直播线路记忆
+  try {
+    var rows0 = document.querySelectorAll('#pset .skiprow');
+    for (var r0 = 0; r0 < rows0.length; r0++) {
+      if (/跨分组|频道倒序|线路记忆|直播/.test(rows0[r0].textContent || '')) drop(rows0[r0]);
+    }
+  } catch(e){}
   try { var vu = $('v-update'); if (vu) vu.innerHTML = ''; } catch(e){}   // 页面留着(show() 要按 id 取), 内容清空
   try {
     var nav = document.querySelectorAll('#navScroll button');
