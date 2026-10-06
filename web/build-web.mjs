@@ -80,16 +80,25 @@ const inject = `
 `;
 const idx = join(dist, 'index.html');
 let html = readFileSync(idx, 'utf8');
+// 注入判据必须用"注入块自己的标记", 不能用 indexOf('bridge.js') ——
+// 界面源码里有注释提到过 bridge.js, 于是那个判断永远为真、整段注入被跳过,
+// 产物里没有 <script src="bridge.js">, window.PK 永远不存在:
+// 表现就是"首页不加载 + 直播出不来 + 该删的按钮又回来"(2026-10 真踩过)。
+const MARK = '<!-- 网页版: JS 桥';
 // 给 <html> 打上 web 标记(第一帧就有): 网页端的响应式样式全部写成 `html.web …`,
 // App 侧匹配不到; 放这里而不是只靠 JS, 是为了避免"首帧还是手机版样式"的闪动。
 html = html.replace(/<html(\s|>)/, '<html class="web"$1');
-if (html.indexOf('bridge.js') < 0) {
+if (html.indexOf(MARK) < 0) {
   // 插在界面脚本之前的第一个标记处; 找不到标记才退回 </body>
   const marks = ['<script src="hls.min.js">', '<script src="app.js">', '</body>'];
+  let placed = false;
   for (const m of marks) {
     const at = html.indexOf(m);
-    if (at > 0) { html = html.slice(0, at) + inject + html.slice(at); break; }
+    if (at > 0) { html = html.slice(0, at) + inject + html.slice(at); placed = true; break; }
   }
+  if (!placed) { console.error('[web] 构建失败: 找不到可插入位置(hls.min.js / app.js / </body>)'); process.exit(1); }
+} else {
+  console.log('[web] 注: 注入块已存在, 跳过(重复构建)');
 }
 writeFileSync(idx, html);
 
@@ -107,6 +116,18 @@ window.ZYWEB = (function () {
   };
 })();
 `);
+
+/* 产物自检(硬闸门): 桥必须在、且在界面脚本之前。
+   以前这一步没有, 于是"注入被静默跳过"一直没人发现, 一直到浏览器里 window.PK 不存在才暴露。 */
+{
+  const built = readFileSync(idx, 'utf8');
+  const iBridge = built.indexOf('src="bridge.js"');
+  const iApp = built.indexOf('src="app.js"');
+  if (iBridge < 0) { console.error('[web] 构建失败: 产物里没有 <script src="bridge.js">, 网页端会整片坏掉'); process.exit(1); }
+  if (iApp > 0 && iBridge > iApp) { console.error('[web] 构建失败: bridge.js 必须插在 app.js 之前, 否则 PK 迟一步, 界面适配不会生效'); process.exit(1); }
+  if (built.indexOf('src="webconfig.js"') < 0) { console.error('[web] 构建失败: 产物里没有 webconfig.js'); process.exit(1); }
+  console.log('[web] 自检通过: 桥在界面脚本之前, webconfig 已注入');
+}
 
 writeFileSync(join(dist, '.nojekyll'), '');
 console.log('[web] 生成完毕: ' + dist);
