@@ -131,6 +131,19 @@ await api(`/accounts/${ACCOUNT}/workers/scripts/${SCRIPT}`, {
 });
 console.log(`[部署] Worker ${SCRIPT} 已更新(静态资源 + 代理)`);
 
+/* 清一次边缘缓存。为什么不靠 Cache-Control 就行: 资源名不带内容指纹(还是 app.js/bridge.js),
+   而 Cloudflare 会把 Worker 的静态资源按 URL 缓存下来 —— 实测出现过"边缘还是旧 app.js,
+   于是新界面配上旧脚本, 界面直接乱掉(用户看到的是首页空白 + 该删掉的按钮又回来)"。
+   所以每次部署后主动清一次, 保证浏览器和边缘都拿到这一版。 */
+if (ZONE) {
+  try {
+    await api(`/zones/${ZONE}/purge_cache`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ purge_everything: true })
+    });
+    console.log('[部署] 已清 Cloudflare 边缘缓存');
+  } catch (e) { console.warn('[部署] 清缓存失败(不影响发布): ' + e.message); }
+}
+
 if (domainArg && ZONE) {
   try {
     await api(`/accounts/${ACCOUNT}/workers/domains`, {
