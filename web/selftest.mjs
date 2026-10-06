@@ -60,22 +60,26 @@ function makeBridge(feeds) {
   return win;
 }
 
-console.log('\n[1] 桥: 代理地址构建与"不重复包裹"不变量');
+console.log('\n[1] 桥: 代理地址构建与不重复包裹的不变量');
 {
+  // ① 没有 Service Worker 接管时: 交回原始地址, **绝不能塞 Worker 地址**
+  //    (塞了就把分片拖到海外出口 -> 国内 CDN 403, 点播就是这么被改坏过)
+  const w0 = makeBridge();
+  const raw = 'https://cdn.example/live/a.m3u8';
+  ok('没 SW 时返回原始地址', w0.PK.proxyWrap(raw, '', '') === raw, w0.PK.proxyWrap(raw, '', ''));
+
+  // ② 有 SW 接管时: 走同源 SW 地址(/p?q=...), 让 SW 在用户本机直连取流
   const w = makeBridge();
+  w.navigator.serviceWorker = { controller: {} };
   const live = 'https://cdn.example/live/cctv5.m3u8';
   const seg = 'https://cdn.example/live/seg-001.ts';
-  const a = w.PK.proxyLive(live, 'https://cdn.example/');
-  const b = w.PK.proxyLive(seg, '');
-  ok('直播清单走同源 /f', a.indexOf('https://site.example/f?') === 0, a.slice(0, 60));
-  ok('分片走同源 /p', b.indexOf('https://site.example/p?') === 0, b.slice(0, 60));
-  ok('已是同源 /f 地址: 再包不变', w.PK.proxyWrap(a, '', '') === a);
-  ok('已是同源 /p 地址: 再包不变', w.PK.proxyWrap(b, '', '') === b);
-  const wprox = 'https://site.example/p?t=x&q=abc';
-  ok('已是代理地址(同源 /p): 再包不变', w.PK.proxyWrap(wprox, '', '') === wprox);
-  const wprox2 = 'https://site.example/f?t=x&q=abc';
-  ok('已是代理地址(同源 /f): 再包不变', w.PK.proxyWrap(wprox2, '', '') === wprox2);
-  ok('普通地址: 会被包成同源出口', w.PK.proxyWrap('https://cdn.example/x.m3u8', '', '').indexOf('https://site.example/f?') === 0);
+  const a = w.PK.proxyWrap(live, 'https://cdn.example/');
+  const b = w.PK.proxyWrap(seg, '');
+  ok('有 SW: 走同源 SW 代理地址', a.indexOf('https://site.example/p?') === 0, a.slice(0, 60));
+  ok('分片同样走 SW', b.indexOf('https://site.example/p?') === 0, b.slice(0, 60));
+  ok('已是 SW 地址: 再包不变', w.PK.proxyWrap(a, '', '') === a);
+  ok('已是同源 /f 地址: 再包不变', w.PK.proxyWrap('https://site.example/f?t=x&q=abc', '', '') === 'https://site.example/f?t=x&q=abc');
+  ok('已是同源 /p 地址: 再包不变', w.PK.proxyWrap('https://site.example/p?t=x&q=abc', '', '') === 'https://site.example/p?t=x&q=abc');
 }
 
 /* ---------------------------------------------------------------- SW: 清单改写不变量 */
