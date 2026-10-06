@@ -1240,6 +1240,7 @@ function playEp(i){
       if (myHls !== hls) return;                    // 这条线路早被换掉了
       try { notePlayErr(d, playUrl); } catch(err){}   // 记下真实原因(网页端会把它在"都播不动"时显示出来)
       if (d && d.fatal) {
+        try { showPlayErrLine(); } catch(err){}
         autoSwitchSource('HLS:' + (d.details || ''));
         setBig('err');
         document.getElementById('ptitle').textContent = curItem.name + ' · ' + ep.name + (srcList.length > 1 ? ' (这条线路失效, 正在自动换源…)' : ' (加载失败)');
@@ -1808,6 +1809,7 @@ function fmt(s){
   v.addEventListener('stalled', function(){ bufLoading(true); });
   // play 只在首次播放触发; 卡顿恢复走 playing, 所以必须监听它
   v.addEventListener('playing', function(){ hideLoad(); bufLoading(false); clearFailWatch(); failedSrc[srcIdx] = false; playedOk = true; applyRate(); syncBar(v);
+    try { clearPlayErrLine(); } catch(e) {}     // 画面起来了, 把"播放失败"那行擦掉
     if (nextTimer) cancelAutoNext(true);      // 用户又让画面动起来(比如往回拖) -> 别静默跳下一集
   });
   v.addEventListener('canplay', function(){ hideLoad(); bufLoading(false); syncBar(v); });
@@ -2740,6 +2742,7 @@ function liveNextLine(reason){
   if (next >= curItem.eps.length) {
     setBig('err');
     hideLoad();
+    try { if (WEB) showPlayErrLine(); } catch(e) {}
     showGest('这个频道 ' + curItem.eps.length + ' 条线路都放不动' + (WEB ? playErrHint() : '')
       + ' —— 可能不是源的问题, 而是本机解不了它的编码(H.265/AC-3 这类): 在「选集」里点「用其它播放器打开」交给 VLC/MX/EXO 试试');
     return;
@@ -2797,6 +2800,28 @@ function notePlayErr(d, url) {
 function playErrHint() {
   if (!lastPlayErr) return '';
   return '（' + lastPlayErr + '）';
+}
+/** 网页端: 把最近一次失败原因**常驻**显示在播放器左下角(gest 提示 1 秒就没了, 没法照着抄) */
+function showPlayErrLine() {
+  if (!WEB) return;
+  try {
+    if (!lastPlayErr) return;
+    var pl = document.getElementById('player');
+    if (!pl) return;
+    var el = document.getElementById('zyerr');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'zyerr';
+      el.style.cssText = 'position:absolute;left:10px;bottom:96px;max-width:78%;z-index:8;'
+        + 'background:rgba(0,0,0,.62);color:#ffd9d9;font-size:11px;line-height:1.5;padding:6px 9px;'
+        + 'border-radius:9px;border:1px solid rgba(255,120,120,.35);word-break:break-all';
+      pl.appendChild(el);
+    }
+    el.textContent = '播放失败: ' + lastPlayErr;
+  } catch (e) {}
+}
+function clearPlayErrLine() {
+  try { lastPlayErr = ''; var el = document.getElementById('zyerr'); if (el && el.parentNode) el.parentNode.removeChild(el); } catch (e) {}
 }
 
 function autoSwitchSource(reason, force){
