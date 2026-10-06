@@ -292,6 +292,32 @@
       return list;
     });
   }
+  /**
+   * 网页版"可播频道"筛选(用户点名的方案②):
+   *   https 页面里浏览器**禁止**加载 http 流(混合内容), 所以只保留"至少有一条 https 线路"的频道,
+   *   其余整条频道不展示 —— 免得点进去必然黑屏。App 侧不做这个筛选(它没这个限制)。
+   */
+  function webPlayable(channels) {
+    try {
+      var out = [];
+      for (var i = 0; i < channels.length; i++) {
+        var c = channels[i];
+        var https = (c.u || []).filter(function (u) { return /^https:/i.test(String(u)); });
+        if (!https.length) continue;
+        c = { n: c.n, g: c.g, u: https, best: c.best, good: c.good, x: c.x };
+        out.push(c);
+      }
+      return out;
+    } catch (e) { return channels; }
+  }
+
+  /** 网页端统一的频道列表: 只留 https 可播的频道, 并把 https 线路排前面 */
+  function webLiveList() {
+    var all0 = webPlayable(liveList() || []);
+    all0.forEach(sortLinesForWeb);
+    return all0;
+  }
+
   /** 网页版: 把每条频道的线路按"浏览器可播性"重排(https 在前, 非标准端口的往后) */
   function sortLinesForWeb(ch) {
     try {
@@ -760,7 +786,7 @@
       if (!names.length) call('onDouban', []);
     },
     liveMeta: function () {
-      var l = liveList(), g = {}, order = [];
+      var l = webLiveList(), g = {}, order = [];
       l.forEach(function (c) { if (!g[c.g]) { g[c.g] = 0; order.push(c.g); } g[c.g]++; });
       return JSON.stringify({ ok: true, count: l.length, ts: Date.now(), tags: 'web', mirror: '', stale: false,
         groups: order.map(function (n) { return { name: n, n: g[n] }; }) });
@@ -769,9 +795,7 @@
       // 网页版的现实: https 页面里**不能混用 http 流**(混合内容), 而 Cloudflare 出口
       // 又有端口白名单(8181/9901 这类直接 1003)与地区限制。所以把 https 线路排前面,
       // 让"能播的那几条"先被尝到, 而不是一上来就撞最不可能通的一条。
-      var all0 = liveList();
-      (all0 || []).forEach(sortLinesForWeb);
-      var l = liveList();
+      var l = webLiveList();
       return JSON.stringify(l.filter(function (c) { return !group || c.g === group; }));
     },
     liveRefresh: function () {
@@ -943,7 +967,7 @@
       el.setAttribute('data-zyweb', '1');
       el.innerHTML += '<br><b>网页版能播的直播很有限</b>：浏览器不允许 https 页面混用 http 流，'
         + 'Cloudflare 出口还有端口白名单（8181/9901 这类端口取不到）与地区限制 —— '
-        + '国内 IPTV 大多落在这几条里，请在 App 里看；这里能播的是 https 且不锁地区的线路。';
+        + '国内 IPTV 大多落在这几条里，请在 App 里看；这里<b>只列出至少有一条 https 线路的频道</b>(http 的整条不展示)。';
     } catch (e) {}
   }
 
