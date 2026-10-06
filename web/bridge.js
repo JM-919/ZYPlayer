@@ -22,6 +22,16 @@
   // 例: 'https://zy-proxy.你的账号.workers.dev'  留空则直连(只有允许跨域的接口能用)
   // 容错: 只写域名(漏了 https://)会自动补全 scheme, 末尾多余的 / 会去掉 —— 免得配置差一个字符就全站 404
   var ZYPROXY = String(CFG.proxy || '').trim().replace(/\/+$/, '');
+  // 用户在页面里显式配过的代理(localStorage 'zyweb_cfg')—— 优先级最高, 用来指向"本机中转"
+  var USER_PROXY = '';
+  try {
+    var _saved = JSON.parse(root.localStorage.getItem('zyweb_cfg') || '{}') || {};
+    if (_saved.proxy) {
+      var _p = String(_saved.proxy).trim().replace(/\/+$/, '');
+      if (_p && !/^[a-z][a-z0-9+.-]*:\/\//i.test(_p)) _p = 'https://' + _p;
+      USER_PROXY = _p;
+    }
+  } catch (e) {}
   if (ZYPROXY && !/^[a-z][a-z0-9+.-]*:\/\//i.test(ZYPROXY)) ZYPROXY = 'https://' + ZYPROXY;
   var PROXY_TOKEN = CFG.token || 'zyweb';      // 与 worker 里配置的一致
   var UA_PLAYER = 'Lavf/58.76.100';
@@ -478,10 +488,19 @@
    * (没 SW 时请求直接到 Worker, 它会就地改写清单; 有 SW 时 SW 拦 /p 做广告过滤)。
    * 这是直播/VOD 最稳的一条出口 —— 之前用跨域的 zyapi 域名, 一旦那边解析/被挡, 直播就整个黑屏。
    */
+  /** 页面侧该用哪个出口: 用户显式配的(本机中转) > 站点自身(线上站点就是 Worker) > 配置里的跨域代理 */
+  function pageProxyBase() {
+    try { if (USER_PROXY) return String(USER_PROXY).replace(/\/+$/, ''); } catch (e) {}
+    try { if (sameHostProxy()) return location.origin + location.pathname.replace(/[^/]*$/, ''); } catch (e) {}
+    if (ZYPROXY) return String(ZYPROXY).replace(/\/+$/, '');
+    // 什么都没配时也用站点自身(线上站点就是 Worker): 总比返回空、让播放器去直连(必被 CORS 挡)强
+    try { return location.origin + location.pathname.replace(/[^/]*$/, ''); } catch (e) { return ''; }
+  }
+
   function sameOriginProxy(url, referer, cookie) {
     if (!url) return '';
-    var base = '';
-    try { base = location.origin + location.pathname.replace(/[^/]*$/, ''); } catch (e) { return ''; }
+    var base = pageProxyBase();
+    if (!base) return '';
     var s0 = String(url);
     var looksPl = /\.m3u8(\?|$)/i.test(s0) || !/\.[a-z0-9]{2,4}(\?|$)/i.test(s0);
     return base + (looksPl ? 'f' : 'p') + '?t=' + encodeURIComponent(PROXY_TOKEN) + '&q=' + b64u(url)
@@ -501,15 +520,7 @@
    */
   function proxyLive(url, referer, cookie) {
     if (!url) return '';
-    var so0 = sameOriginProxy(url, referer, cookie);
-    if (so0) return so0;                       // 线上: 站点就是 Worker —— 同源最稳
-    if (!ZYPROXY) return '';
-    var s0 = String(url);
-    if (s0.indexOf(ZYPROXY + '/f?') === 0 || s0.indexOf(ZYPROXY + '/p?') === 0) return url;
-    var looksPl = /\.m3u8(\?|$)/i.test(s0) || !/\.[a-z0-9]{2,4}(\?|$)/i.test(s0);
-    return ZYPROXY + (looksPl ? '/f' : '/p') + '?t=' + encodeURIComponent(PROXY_TOKEN) + '&q=' + b64u(url)
-      + (referer ? '&r=' + encodeURIComponent(referer) : '')
-      + (cookie ? '&c=' + encodeURIComponent(cookie) : '');
+    return sameOriginProxy(url, referer, cookie);   // 出口按 pageProxyBase() 的优先级(本机中转 > 站点自身 > 配置的代理)
   }
 
   function proxyWrap(url, referer, cookie) {
@@ -520,7 +531,9 @@
     // ① 已经是"本代理地址"就别再套一层。必须 /f 和 /p 都认:
     //    直播地址现在是指向同源 /f 的(Worker 改写过的清单), 只认 /p 的话它会再被包一层,
     //    于是 Worker 收到"目标是自己"的请求 → 自引用 → Cloudflare 直接丢 522(用户截图里那个)。
-    if (base && (s0.indexOf(base + 'f?') === 0 || s0.indexOf(base + 'p?') === 0)) return url;
+    var _pb = pageProxyBase();
+    if (_pb && (s0.indexOf(_pb + '/f?') === 0 || s0.indexOf(_pb + '/p?') === 0)) return url;
+    if (_pb && (s0.indexOf(_pb + 'f?') === 0 || s0.indexOf(_pb + 'p?') === 0)) return url;
     // ①b 跨域的 Worker 地址同理
     if (ZYPROXY && (s0.indexOf(ZYPROXY + '/f?') === 0 || s0.indexOf(ZYPROXY + '/p?') === 0)) return url;
     // ② Service Worker 还没接管(首次打开/刚更新)时不能返回裸地址: 浏览器直连上游普遍缺 CORS 头,
