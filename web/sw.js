@@ -180,7 +180,10 @@ async function handle(request, url) {
   try { upstream = await tryFetch(u, headers); } catch (e) { upstream = null; }
   if (!upstream || !upstream.ok) {
     const keep = upstream;                       // 直连虽然不 ok, 但它的状态码/正文对排查有用
-    if (PROXY) {
+    // 兜底出口: 优先用配置里的代理; **配置还没读到也没关系** —— 线上本站自己就是 Worker,
+    // 同源 /f|/p 一样能取(豆瓣图床那种"不带 Referer 就 418"的资源就是靠这一跳救回来的)。
+    const fbBase = proxyBase() || (self.location.origin + self.location.pathname.replace(/[^/]*$/, ''));
+    if (fbBase) {
       try {
         upstream = await tryFetch(proxyUrl(u, looksPlaylist ? '/f' : '/p', r, c), range ? { Range: range } : {});
       } catch (e) { upstream = keep; }
