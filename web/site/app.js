@@ -999,6 +999,9 @@ function toggleLock(){
     hideUI();
     lockHinted = false;
     lockTap = null;
+    // 锁屏只该冻住控件与方向, **不碰声音**: 这里显式不动 muted/volume,
+    // 只把音量 UI 同步一次(避免"锁一下声音就不对了"的错觉 —— 实际是显示与真实值脱节)。
+    try { if (WEB) syncVolUI(); } catch(e){}
     clearTimeout(lockHideTimer);
     lockHideTimer = setTimeout(function(){               // 亮 1.5 秒就收, 之后靠点屏幕唤出
       if (!locked) return;
@@ -3779,6 +3782,10 @@ function applyWebMode(){
       else if (k === 'ArrowDown') { webSetVolume(webVol() - 0.05); ev.preventDefault(); }
       else if (k === 'f' || k === 'F') { toggleFullscreen(); ev.preventDefault(); }
       else if (k === 'm' || k === 'M') { webMuteToggle(); ev.preventDefault(); }
+      else if (k === 'Escape' || k === 'Esc') {
+        if (document.fullscreenElement || document.webkitFullscreenElement) return;   // 全屏时 Esc 先被浏览器吃掉
+        if (locked) { toggleLock(); ev.preventDefault(); }                            // 电脑上锁屏后: Esc 解锁
+      }
     });
     var pl2 = $('player');
     if (pl2) pl2.addEventListener('wheel', function(ev){
@@ -3810,6 +3817,9 @@ function applyWebMode(){
         var now = Date.now();
         if (now - lastMv < 100) { lastUIAt = now; return; }   // 节流: 高频事件不用每次都重排
         lastMv = now;
+        // 锁屏时 showUI() 是空转(它遇到 locked 直接 return), 得走 lockReveal 才能把那把锁浮出来 ——
+        // 以前只有触摸事件调 lockReveal, 于是"电脑上锁了就永远解不开"(用户反馈)。
+        if (locked) { lockReveal(3000); return; }
         showUI();
       });
       pl3.addEventListener('mouseleave', function(){ try { hideUI(); } catch(e){} });
@@ -3818,7 +3828,7 @@ function applyWebMode(){
         // 触摸设备合成的 click 交给原有的触摸逻辑, 这里只处理真鼠标
         if (!hasMouse || (ev.sourceCapabilities && ev.sourceCapabilities.firesTouchEvents)) return;
         if (inCtrl(ev.target) || (anySheetOpen && anySheetOpen())) return;   // 抽屉开着时单击不切播放
-        if (locked) { showUI(); return; }
+        if (locked) { lockReveal(3000); return; }             // 锁屏: 单击把锁浮出来(再点那把锁即解锁)
         if (!controlsVisible()) { showUI(); return; }         // 第一下先把控制栏叫出来(和手机端一致)
         togglePlay(); showUI();
       });
