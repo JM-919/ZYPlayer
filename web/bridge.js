@@ -22,7 +22,7 @@
   // 例: 'https://zy-proxy.你的账号.workers.dev'  留空则直连(只有允许跨域的接口能用)
   // 容错: 只写域名(漏了 https://)会自动补全 scheme, 末尾多余的 / 会去掉 —— 免得配置差一个字符就全站 404
   var ZYPROXY = String(CFG.proxy || '').trim().replace(/\/+$/, '');
-  // 用户在页面里显式配过的代理(localStorage 'zyweb_cfg')—— 优先级最高, 用来指向"本机中转"
+  // 用户在页面里显式配过的代理(localStorage 'zyweb_cfg')—— 优先级最高, 用来指向自己的代理(比如自建的中转)
   var USER_PROXY = '';
   try {
     var _saved = JSON.parse(root.localStorage.getItem('zyweb_cfg') || '{}') || {};
@@ -344,7 +344,7 @@
    */
   /**
    * 图片也走代理。豆瓣图床对 Referer 有要求: 不带 Referer 回 418、带本站 Referer 回 403、
-   * 带豆瓣自己的 Referer 才 200 —— `<img>` 标签改不了 Referer, 所以只能让 Worker/中转去取。
+   * 带豆瓣自己的 Referer 才 200 —— `<img>` 标签改不了 Referer, 所以只能让 Worker 去取。
    * (SW 在的时候会先直连, 拿不到(=418)自动回落到 Worker, 那条路上 Referer 是服务端加的。)
    */
   function imgVia(u, referer) {
@@ -355,7 +355,7 @@
       + '&r=' + encodeURIComponent(referer || 'https://m.douban.com/');
   }
 
-  /** 页面侧该用哪个出口: 用户显式配的(本机中转) > 站点自身(线上站点就是 Worker) > 配置里的跨域代理 */
+  /** 页面侧该用哪个出口: 用户显式配置的代理 > 站点自身(线上站点就是 Worker) > webconfig 里的代理 */
   function pageProxyBase() {
     try { if (USER_PROXY) return String(USER_PROXY).replace(/\/+$/, ''); } catch (e) {}
     try { if (sameHostProxy()) return location.origin + location.pathname.replace(/[^/]*$/, ''); } catch (e) {}
