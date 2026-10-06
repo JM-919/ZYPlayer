@@ -101,82 +101,51 @@
   .eps button.cur{background:var(--grn);color:#07120a;}
   .tag{display:inline-block;font-size:11px;padding:1px 8px;border-radius:99px;background:var(--g1);color:var(--dim);
     margin-right:6px;border:1px solid var(--hair);}
-  /* ================= 网页端自适应(只有网页版生效) =================
-     关键约定: 下面每一条选择器都写成 `html.web …`, 而 web 这个 class 只有 bridge.js 在网页版里
-     才会加到 <html> 上 —— Android App 用同一份 index.html, 但它永远匹配不到这些规则,
-     所以"按屏幕宽度适配网页端"不会把 App 的样子改坏(不越界)。
-     档位: 小屏手机 <360 / 手机 360~599 / 平板 600~819 / 小桌面 820~1099 / 桌面 1100~1399 / 大屏 >=1400
-     写法只用 flex + 百分比(老内核解析到也不会错)。 */
-  html.web #main section{max-width:1120px;margin:0 auto;}
-  html.web button,html.web input,html.web select,html.web .item,html.web .hlist .item{cursor:pointer;}
-  html.web button{transition:filter .12s ease, transform .12s ease;}
-  html.web button:hover{filter:brightness(1.18);}
-  html.web button:active{transform:scale(.97);}
-
-  /* 小屏手机: 卡片 2 列, 选集 3 列, 字号收一点 */
-  @media (max-width: 359px){
-    html.web .grid{display:flex;flex-wrap:wrap;margin:-5px;}
-    html.web .grid .item{width:calc(50% - 10px);margin:5px;}
-    html.web .eps{display:flex;flex-wrap:wrap;margin:-5px;}
-    html.web .eps button{width:calc(33.333% - 10px);margin:5px;font-size:12px;}
-    html.web main{padding:10px 10px 40px;}
+  /* ================= 网页端自适应(照静态博客的做法) =================
+     参考用户自己的博客(felixdsh2.eu.cc): 文档自然滚动 + 容器限宽(~1080px) +
+     流式网格 repeat(auto-fill, minmax(...)) + 断点 560 / 720 / 880 / 1180。
+     全部选择器带 html.web 前缀 —— 那个 class 只有网页版产物才有(构建时写进 <html>),
+     安卓 App 用同一份 index.html 但永远匹配不到, 所以怎么改都不会越界。 */
+  html.web, html.web body{height:auto;min-height:100%;overflow:visible;overflow-x:hidden;scroll-behavior:smooth;}
+  html.web #app{height:auto;min-height:100vh;}
+  html.web main{flex:none;overflow:visible;padding:14px 16px 56px;}
+  html.web #main section{width:100%;max-width:1080px;margin:0 auto;}
+  html.web header{flex-wrap:wrap;}
+  html.web #navScroll{flex-wrap:wrap;overflow:visible;}
+  html.web .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));}
+  html.web .eps{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));}
+  html.web .bar{flex-wrap:wrap;}
+  html.web button,html.web .item,html.web .hlist .item,html.web input,html.web select{cursor:pointer;}
+  html.web .item{transition:transform .15s ease, box-shadow .15s ease;}
+  html.web .item:hover{transform:translateY(-2px);}
+  html.web #ptop,html.web #pbot{padding-left:6%;padding-right:6%;}
+  html.web #pgbar,html.web #prow{max-width:1080px;margin:0 auto;}
+  @media (max-width:560px){
+    html.web main{padding:12px 12px 44px;}
+    html.web .grid{grid-template-columns:repeat(auto-fill,minmax(104px,1fr));}
+    html.web .eps{grid-template-columns:repeat(auto-fill,minmax(70px,1fr));}
     html.web header h1{font-size:15px;}
   }
-  /* 平板(竖屏) */
-  @media (min-width: 600px){
-    html.web main{padding:14px 18px 48px;}
-    html.web #main section{max-width:900px;}
-    html.web .grid{display:flex;flex-wrap:wrap;margin:-7px;}
-    html.web .grid .item{width:calc(25% - 14px);margin:7px;}
-    html.web .eps{display:flex;flex-wrap:wrap;margin:-6px;}
-    html.web .eps button{width:calc(20% - 12px);margin:6px;font-size:13px;}
-    html.web .dhead{grid-template-columns:130px 1fr;}
-    html.web .dhead img{width:130px;height:195px;}
-    html.web .bar input,html.web .bar select{max-width:460px;}
+  @media (min-width:720px){
+    html.web .grid{grid-template-columns:repeat(auto-fill,minmax(160px,1fr));}
   }
-  /* 小桌面 */
-  @media (min-width: 820px){
-    html.web main{padding:18px 24px 56px;}
-    html.web #main section{max-width:1040px;}
-    html.web .grid .item{width:calc(20% - 16px);margin:8px;}
-    html.web .grid{margin:-8px;}
-    html.web .eps button{width:calc(14.285% - 16px);margin:8px;font-size:13px;}
-    html.web .eps{margin:-8px;}
+  @media (min-width:880px){
+    html.web main{padding:18px 22px 64px;}
+    html.web #main section{max-width:1060px;}
+    html.web .grid{grid-template-columns:repeat(auto-fill,minmax(172px,1fr));}
+    html.web .eps{grid-template-columns:repeat(auto-fill,minmax(96px,1fr));}
     html.web .dhead{grid-template-columns:150px 1fr;}
     html.web .dhead img{width:150px;height:225px;}
     html.web .dhead h2{font-size:22px;}
-    html.web .desc{max-height:240px;font-size:13.5px;line-height:1.8;}
-    html.web .hlist .item{width:130px;flex:0 0 auto;}
+    html.web .desc{max-height:240px;}
     html.web .bar input,html.web .bar select{max-width:520px;}
     html.web .kwprev{max-width:760px;}
-    html.web .sec{font-size:15px;margin:20px 2px 10px;}
-    html.web .item{transition:transform .15s ease, box-shadow .15s ease;}
-    html.web .item:hover{transform:translateY(-3px);box-shadow:0 12px 28px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.14);}
-    html.web #ptop,html.web #pbot{padding-left:6%;padding-right:6%;}
-    html.web #pgbar,html.web #prow{max-width:1120px;margin:0 auto;}
-    html.web .pbtn{padding:7px 12px;}
+    html.web .sec{font-size:15px;}
+    html.web .item:hover{box-shadow:0 12px 28px rgba(0,0,0,.5);}
   }
-  /* 桌面 */
-  @media (min-width: 1100px){
-    html.web #main section{max-width:1120px;}
-    html.web .grid .item{width:calc(16.666% - 16px);}
-  }
-  /* 大屏 */
-  @media (min-width: 1400px){
-    html.web #main section{max-width:1320px;}
-    html.web .grid .item{width:calc(12.5% - 16px);}
-  }
-  /* 有鼠标的设备: 进度条细条也好拖 */
-  @media (hover: hover) and (pointer: fine){
-    html.web #ptrack{height:6px;}
-    html.web #ptrack:hover{height:9px;}
-  }
-  /* 手机横屏(矮窗口): 上下留白收掉, 把高度让给内容; 播放器控件也贴近边缘 */
-  @media (orientation: landscape) and (max-height: 560px){
-    html.web main{padding:8px 14px 30px;}
-    html.web header{padding:6px 12px;}
-    html.web .sec{margin:10px 2px 6px;}
-    html.web #ptop,html.web #pbot{padding-left:12px;padding-right:12px;}
+  @media (min-width:1180px){
+    html.web #main section{max-width:1080px;}
+    html.web .grid{grid-template-columns:repeat(auto-fill,minmax(184px,1fr));}
   }
   /* 播放器 */
   html.web #player.on{background:#04050a;}
