@@ -512,17 +512,6 @@
     try { return !!ZYPROXY && (new URL(ZYPROXY)).host === location.host; } catch (e) { return false; }
   }
 
-  /**
-   * 直播专用出口: 直接给 Worker 地址(不经过页面的 Service Worker)。
-   * 为什么单开一个: 直播一旦卡在"旧 SW 直接跨域取流"上就是黑屏, 而且用户在浏览器里
-   * 不一定刷新过 SW。Worker 侧现在会把清单里的每条地址改写成继续走它自己(见 proxy/worker.js),
-   * 所以直播彻底不依赖 SW 也能播; App 侧没有这个桥方法, 会照旧走 LocalProxy。
-   */
-  function proxyLive(url, referer, cookie) {
-    if (!url) return '';
-    return sameOriginProxy(url, referer, cookie);   // 出口按 pageProxyBase() 的优先级(本机中转 > 站点自身 > 配置的代理)
-  }
-
   function proxyWrap(url, referer, cookie) {
     if (!url) return url;
     var s0 = String(url);
@@ -538,15 +527,9 @@
     if (ZYPROXY && (s0.indexOf(ZYPROXY + '/f?') === 0 || s0.indexOf(ZYPROXY + '/p?') === 0)) return url;
     // ② Service Worker 还没接管(首次打开/刚更新)时不能返回裸地址: 浏览器直连上游普遍缺 CORS 头,
     //    直播就是"黑屏"。这时退回直接走 Cloudflare 代理, 至少能拿到字节。
-    if (!root.navigator || !root.navigator.serviceWorker || !root.navigator.serviceWorker.controller) {
-      var so = sameOriginProxy(url, referer, cookie);
-      if (so) return so;                       // 没 SW: 同源出口(Worker 会改写清单)
-      if (!ZYPROXY) return url;
-      var looksPl = /\.m3u8(\?|$)/i.test(s0) || !/\.[a-z0-9]{2,4}(\?|$)/i.test(s0);
-      return ZYPROXY + (looksPl ? '/f' : '/p') + '?t=' + encodeURIComponent(PROXY_TOKEN) + '&q=' + b64u(url)
-        + (referer ? '&r=' + encodeURIComponent(referer) : '')
-        + (cookie ? '&c=' + encodeURIComponent(cookie) : '');
-    }
+    // 没有 Service Worker 就交回原始地址(浏览器直连)。**不要**在这里塞 Worker 地址:
+    // 那样分片会被拉到海外出口, 国内 CDN 直接 403 —— 点播就是这么被我改坏的。
+    if (!root.navigator || !root.navigator.serviceWorker || !root.navigator.serviceWorker.controller) return url;
     var q = 'p?t=' + SWTOKEN + '&q=' + b64u(url);
     if (referer) q += '&r=' + encodeURIComponent(referer);
     if (cookie) q += '&c=' + encodeURIComponent(cookie);
@@ -795,7 +778,6 @@
     adFilter: function (on) { adFilterOn = !!on; },
     adStats: function () { return JSON.stringify({ on: adFilterOn, dropped: adDropped, note: adNote }); },
     proxyWrap: function (u, r, c) { return proxyWrap(u, r, c); },
-    proxyLive: function (u, r, c) { return proxyLive(u, r, c); },
     douban: function (namesJson, limit) {
       var names = [];
       try { names = JSON.parse(namesJson) || []; } catch (e) {}
