@@ -126,12 +126,12 @@ function pickSite(k){
   curSite = k;
   var sel = $("typeSel");
   if (sel) { sel.innerHTML = ''; }                 // 先把旧源的分类表清掉, 免得拿旧 typeId 去问新源
-  // ★ 网页版首页是豆瓣榜单, 分类下拉就直接给「各大榜单」(电影/剧集/综艺/动漫/纪录)。
+  // ★ 首页是豆瓣榜单(两端一致), 分类就由「各大榜单」面板给。
   //   不再问采集源的分类表: 那一套 typeId 对豆瓣接口没意义(以前选了分类却还是同一批数据)。
-  if (isWeb()) {
+  if (chartsAvailable()) {
     pendingPick = false;
     clearTimeout(pickTimer);
-    fillWebCharts();
+    fillCharts();
     reloadHome();
     return;
   }
@@ -158,9 +158,9 @@ var homeTimeout = null, homeDoneSeq = 0, forceSeq = 0;
 function reloadHome(force){
   if (!curSite) { try { PK.toast('数据源还没就绪, 等一下再刷'); } catch(e){} return; }
   curType = $("typeSel").value; page = 1;
-  if (isWeb()) {
-    try { localStorage.setItem('zy_web_chart', curType || 'movie_showing'); } catch(e) {}   // 下次进来还是这个榜单
-    paintWebChart();
+  if (chartsAvailable()) {              // 下次进来还是这个榜单, 并同步面板高亮
+    try { localStorage.setItem('zy_web_chart', curType || 'movie_showing'); } catch(e) {}
+    paintChart();
   }
   var ck = "pk_home_" + curSite + "_" + curType;
   var cached = null;
@@ -2674,17 +2674,32 @@ function refreshDbRow(){
   } catch(e){}
 }
 
-/* ---------- 网页版分类下拉: 豆瓣各大榜单 ----------
+/**
+ * 榜单表: 网页版由 web/bridge.js 提供, 安卓端由 Java 的 VodBridge.doubanCharts() 提供 ——
+ * **两端都有**, 所以首页分类统一用"排行榜面板"这套布局(用户要求把网页那套搬到安卓端)。
+ * 表内容不许瞎写: 只在线上实测非空的榜单才在里面(见 bridge.js / Douban.java 的注释)。
+ */
+var CHARTS_CACHE = null;
+function chartsList(){
+  if (CHARTS_CACHE) return CHARTS_CACHE;
+  CHARTS_CACHE = [];
+  try { CHARTS_CACHE = JSON.parse(VOD.doubanCharts()) || []; } catch(e) { CHARTS_CACHE = []; }
+  return CHARTS_CACHE;
+}
+function chartsAvailable(){ return chartsList().length > 0; }
+
+/* ---------- 首页分类: 豆瓣各大榜单 ----------
  * 榜单表在 bridge.js 的 CHARTS 里(每一条都在线上真测过非空, 空榜单不许写进去 —— 用户最烦"点了没内容")。
  * 这里只做一件事: 按「电影/剧集/综艺/动漫/纪录」分组填进 #typeSel; 切换由已有的 onchange=reloadHome() 接管,
  * 翻页(加载更多)也照旧走豆瓣的 start/count。
  */
-function fillWebCharts(){
+function fillCharts(){
   var sel = document.getElementById('typeSel');
   if (!sel) return;
-  var list = [];
-  try { list = JSON.parse(VOD.doubanCharts()); } catch(e) { list = []; }
+  var list = chartsList();
   if (!list || !list.length) return;
+  sel.style.display = 'none';     // 首页分类 = 榜单面板, 原来那个"最新更新/电影/连续剧"下拉没用了
+
   var groups = [], map = {}, i, c;
   for (i = 0; i < list.length; i++) {
     c = list[i];
@@ -2720,55 +2735,55 @@ function fillWebCharts(){
       for (var m = 0; m < arr.length; m++) {
         bh += '<button type="button" class="bchip" data-id="' + esc(arr[m].id) + '"'
             + ' data-g="' + esc(groups[g2]) + '"'
-            + ' data-main="' + (isWebChartMain(arr[m].id) ? '1' : '0') + '"'
-            + ' onclick="pickWebChart(this)">' + esc(arr[m].name) + '</button>';
+            + ' data-main="' + (isMainChart(arr[m].id) ? '1' : '0') + '"'
+            + ' onclick="pickChart(this)">' + esc(arr[m].name) + '</button>';
       }
     }
-    bh += '<button type="button" class="bmore" onclick="toggleWebCharts()" id="bmoreBtn"></button>';
+    bh += '<button type="button" class="bmore" onclick="toggleCharts()" id="bmoreBtn"></button>';
     board.innerHTML = bh;
-    paintWebChart();
+    paintChart();
   }
 }
 
 /* 收起时保留的「常用榜单」—— 首页一屏就能看完, 不用滚 */
 // 收起时露出的四个(用户点名): 电影只留"正在上映"、剧集只留"热门剧集", 综艺与纪录片同行一排。
 // 动漫(tv_animation)**不在**这一排里 —— 它只在「更多榜单」展开后出现。
-var WEB_MAIN_CHARTS = ['movie_showing', 'tv_hot', 'tv_variety_show', 'tv_documentary'];
-function isWebChartMain(id){ return WEB_MAIN_CHARTS.indexOf(String(id)) >= 0; }
-var _webChartsOpen = null;                 // 内存里的**真实状态**, localStorage 只是"记一笔"
-function webChartsOpen(){
-  if (_webChartsOpen !== null) return _webChartsOpen;
-  try { _webChartsOpen = localStorage.getItem('zy_web_chart_more') === '1'; } catch(e) { _webChartsOpen = false; }
-  return _webChartsOpen;
+var MAIN_CHARTS = ['movie_showing', 'tv_hot', 'tv_variety_show', 'tv_documentary'];
+function isMainChart(id){ return MAIN_CHARTS.indexOf(String(id)) >= 0; }
+var _chartsOpen = null;                 // 内存里的**真实状态**, localStorage 只是"记一笔"
+function chartsOpen(){
+  if (_chartsOpen !== null) return _chartsOpen;
+  try { _chartsOpen = localStorage.getItem('zy_web_chart_more') === '1'; } catch(e) { _chartsOpen = false; }
+  return _chartsOpen;
 }
 
 /* 「更多榜单 ▾ / 收起 ▴」: 14 个全铺开, 或只留常用的 4 个 + 这一行按钮。
    状态以内存为准 —— 浏览器隐身模式/禁 localStorage 时 setItem 会抛异常, 以前那样
    "每次去读 localStorage" 就会导致按钮点了没反应(永远读到 false)。 */
-function toggleWebCharts(){
-  _webChartsOpen = !webChartsOpen();
-  try { localStorage.setItem('zy_web_chart_more', _webChartsOpen ? '1' : '0'); } catch(e) {}
-  paintWebChart();
+function toggleCharts(){
+  _chartsOpen = !chartsOpen();
+  try { localStorage.setItem('zy_web_chart_more', _chartsOpen ? '1' : '0'); } catch(e) {}
+  paintChart();
 }
 
 /* 面板里点了某个榜单: 写回下拉(逻辑仍走 reloadHome 那一套) + 记住 + 高亮 */
-function pickWebChart(el){
+function pickChart(el){
   var id = (el && el.getAttribute('data-id')) || '';
   if (!id) return;
   var sel = document.getElementById('typeSel');
   if (sel) { try { sel.value = id; } catch(e) {} }
   try { localStorage.setItem('zy_web_chart', id); } catch(e2) {}
-  paintWebChart();
+  paintChart();
   reloadHome();
 }
 
 /* 高亮当前榜单(面板重绘/切榜单后都要刷一次) */
-function paintWebChart(){
+function paintChart(){
   var board = document.getElementById('dbboards');
   if (!board || !board.querySelectorAll) return;
   var cur = '';
   try { cur = (document.getElementById('typeSel') || {}).value || ''; } catch(e) {}
-  var open = webChartsOpen();
+  var open = chartsOpen();
   board.className = open ? '' : 'collapsed';
   // ① 每个榜单: 高亮 + 是否属于"收起时要藏起来的那批"
   //    ★ 当前选中的**永远不藏**(data-main 不为 1 也显示), 否则收起后高亮不见了像"点了没反应"

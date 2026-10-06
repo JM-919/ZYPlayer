@@ -128,26 +128,26 @@
   /* 网页端「榜单面板」: 14 个榜单按分组铺开 —— 窄屏 3 列左右, 屏越宽列越多(fill + minmax 自己算),
      分组标题跨整行(grid-column:1/-1), 所以手机竖屏/平板/桌面都是"满的", 首页不再空一大片。
      面板与下拉二选一: 网页端把下拉藏掉(它还在用, 只是不显示了 —— reloadHome 仍从它取值)。 */
-  #dbboards{display:none;}                                  /* 安卓端永不显示(面板是网页版专属) */
-  html.web #typeSel{display:none;}
-  html.web #dbboards{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;margin:0 0 12px;}
-  html.web #dbboards .bgroup{grid-column:1/-1;font-size:12px;color:var(--dim);letter-spacing:.4px;margin:4px 0 -3px;}
-  html.web #dbboards .bchip{padding:9px 6px;border-radius:10px;background:var(--g1);color:var(--fg);
+  /* 首页分类面板: **两端都用**(网页端与安卓端同一套布局, 榜单表分别来自 bridge.js / Douban.java)。
+     老内核(Chrome<57)不支持 grid 时会退化成"每个按钮一行"的竖排 —— 不重叠、可点, 能用。 */
+  #dbboards{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;margin:0 0 12px;}
+  #dbboards .bgroup{grid-column:1/-1;font-size:12px;color:var(--dim);letter-spacing:.4px;margin:4px 0 -3px;}
+  #dbboards .bchip{padding:9px 6px;border-radius:10px;background:var(--g1);color:var(--fg);
     border:1px solid var(--hair);font-size:13px;line-height:1.2;cursor:pointer;white-space:nowrap;
     overflow:hidden;text-overflow:ellipsis;}
-  html.web #dbboards .bchip.on{background:var(--grn);color:#07120a;font-weight:600;border-color:transparent;}
-  html.web #dbboards .bchip:hover{background:var(--g2);}
+  #dbboards .bchip.on{background:var(--grn);color:#07120a;font-weight:600;border-color:transparent;}
+  #dbboards .bchip:hover{background:var(--g2);}
   /* 折叠态(默认): 只留「正在上映/热门电影/热门剧集/综艺」四个常用榜单 + 一行「更多榜单」。
      展开后 14 个全铺开; 展开状态记在 localStorage(zy_web_chart_more)。**选中的那个永远可见**,
      否则收起后高亮跑到看不见的地方, 用户会以为"点了没反应"。 */
-  html.web #dbboards.collapsed .bchip.extra{display:none;}
-  html.web #dbboards.collapsed .bgroup{display:none;}      /* 收起时不要分组标题, 就干净一排 */
+  #dbboards.collapsed .bchip.extra{display:none;}
+  #dbboards.collapsed .bgroup{display:none;}      /* 收起时不要分组标题, 就干净一排 */
   /* 收起态固定 4 列: 「正在上映 / 热门剧集 / 综艺 / 纪录片」一定在同一排(不会因为屏窄被挤到第二行),
      屏再窄也是 4 等分, 只是字更小; 「更多榜单 ▾」仍然单独占一整行。 */
-  html.web #dbboards.collapsed{grid-template-columns:repeat(4,minmax(0,1fr));}
-  html.web #dbboards .bmore{grid-column:1/-1;margin-top:2px;padding:8px 6px;border-radius:10px;
+  #dbboards.collapsed{grid-template-columns:repeat(4,minmax(0,1fr));}
+  #dbboards .bmore{grid-column:1/-1;margin-top:2px;padding:8px 6px;border-radius:10px;
     background:transparent;color:var(--dim);border:1px dashed var(--hair);font-size:12px;cursor:pointer;}
-  html.web #dbboards .bmore:hover{color:var(--fg);border-color:rgba(255,255,255,.28);}
+  #dbboards .bmore:hover{color:var(--fg);border-color:rgba(255,255,255,.28);}
   html.web button,html.web .item,html.web input,html.web select{cursor:pointer;}
   html.web .item{transition:transform .15s ease, box-shadow .15s ease;}
   html.web .item:hover{transform:translateY(-2px);}
@@ -159,10 +159,10 @@
   }
   @media (max-width:560px){
     html.web main{padding:12px 12px 44px;}
-    html.web #dbboards{grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:6px;}
-    html.web #dbboards.collapsed{grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;}
-    html.web #dbboards .bchip{font-size:12px;padding:8px 4px;}
-    html.web #dbboards.collapsed .bchip{font-size:11px;padding:8px 2px;}
+    #dbboards{grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:6px;}
+    #dbboards.collapsed{grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;}
+    #dbboards .bchip{font-size:12px;padding:8px 4px;}
+    #dbboards.collapsed .bchip{font-size:11px;padding:8px 2px;}
     html.web .grid{grid-template-columns:repeat(auto-fill,minmax(104px,1fr));}
     html.web .eps{grid-template-columns:repeat(auto-fill,minmax(70px,1fr));}
     html.web header h1{font-size:15px;}
@@ -539,8 +539,8 @@
         </select>
         <button class="ghost mini" onclick="reloadHome(1)">刷新</button>
       </div>
-      <!-- 网页端的「榜单面板」: 14 个豆瓣榜单按分组铺成网格(见 html.web #dbboards)。
-           安卓端由 CSS 关掉(display:none), 它照样用上面那个分类下拉。 -->
+      <!-- 首页「榜单面板」: 14 个豆瓣榜单按分组铺成网格(表格数据两端各自提供)。
+           面板出现时下面那个分类下拉会被 JS 藏掉(fillCharts)。 -->
       <div id="dbboards"></div>
       <div class="grid" id="homeGrid"></div>
       <div id="load" onclick="moreHome()" style="cursor:pointer">— 点这里加载更多 —</div>
