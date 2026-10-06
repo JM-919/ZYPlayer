@@ -342,6 +342,19 @@
    * (没 SW 时请求直接到 Worker, 它会就地改写清单; 有 SW 时 SW 拦 /p 做广告过滤)。
    * 这是直播/VOD 最稳的一条出口 —— 之前用跨域的 zyapi 域名, 一旦那边解析/被挡, 直播就整个黑屏。
    */
+  /**
+   * 图片也走代理。豆瓣图床对 Referer 有要求: 不带 Referer 回 418、带本站 Referer 回 403、
+   * 带豆瓣自己的 Referer 才 200 —— `<img>` 标签改不了 Referer, 所以只能让 Worker/中转去取。
+   * (SW 在的时候会先直连, 拿不到(=418)自动回落到 Worker, 那条路上 Referer 是服务端加的。)
+   */
+  function imgVia(u, referer) {
+    if (!u) return '';
+    var base = pageProxyBase();
+    if (!base) return u;
+    return base + 'p?t=' + encodeURIComponent(PROXY_TOKEN) + '&q=' + b64u(u)
+      + '&r=' + encodeURIComponent(referer || 'https://m.douban.com/');
+  }
+
   /** 页面侧该用哪个出口: 用户显式配的(本机中转) > 站点自身(线上站点就是 Worker) > 配置里的跨域代理 */
   function pageProxyBase() {
     try { if (USER_PROXY) return String(USER_PROXY).replace(/\/+$/, ''); } catch (e) {}
@@ -441,10 +454,12 @@
         var j = toJson(txt) || {};
         var list = j.subject_collection_items || j.items || [];
         var items = list.map(function (v) {
-          var pic = (v.pic && (v.pic.normal || v.pic.large || v.pic)) || '';
+          // 注意: 豆瓣这个接口给的是 `cover.url`(**没有** pic 字段) —— 之前映射 pic 才导致海报全空
+          var raw = (v.cover && (v.cover.url || v.cover)) || (v.pic && (v.pic.normal || v.pic.large || v.pic)) || v.cover_url || '';
+          if (raw && typeof raw === 'object') raw = raw.url || '';
           var score = (v.rating && v.rating.value) ? String(v.rating.value) : '';
-          var sub = v.card_subtitle || v.year || '';
-          return { name: v.title || '', pic: pic, score: score, remarks: String(sub), year: String(v.year || ''),
+          return { name: v.title || '', pic: imgVia(raw), score: score,
+                   remarks: String(v.year || ''), year: String(v.year || ''),
                    douban: 1, url: v.url || '', site: '', id: '', eps: [] };
         }).filter(function (x) { return x.name; });
         call('onVodHome', seq, items);
