@@ -489,6 +489,8 @@ function renderDetail(){
       + (isSeen(it.name, epLabel(eps[j], j)) ? ' <span style="color:#8ff0b4">✓</span>' : '') + '</button>';
   }
   var boxE = document.getElementById('epsBox');
+  // 网页端: 选集"黑块"排查用的一行数据(控制台可见: 多少集、多少条空名)
+  try { if (WEB) { var _empty = 0; for (var z = 0; z < eps.length; z++) if (!String(eps[z].name || '').trim()) _empty++; console.log('[选集] 共 ' + eps.length + ' 集, 空名 ' + _empty + ' 条'); } } catch(e) {}
   boxE.className = 'eps' + (eps.length > 30 ? ' fold' : '');
   boxE.innerHTML = b || '<div class="empty">没有可用播放地址</div>';
   if (eps.length > 30) {
@@ -2080,8 +2082,8 @@ var fitNames = ['适应', '铺满', '裁剪', '16:9', '4:3', '原始'];
 var fitCss = ['contain', 'fill', 'cover', '169', '43', 'native'];
 var fitMode = 0;   // 0=适应
 /* ---------- 播放器/直播设置(参考 TVBox 的设置分组: 画面比例/超时/换源/OSD 都可调且记住) ---------- */
-var PS = { ratio: 0, buf: 'normal', to: 12, autoSw: 1, osd: 1, cross: 1, desc: 0, rate: 1 };
-var PS_DEF = { ratio: 0, buf: 'normal', to: 12, autoSw: 1, osd: 1, cross: 1, desc: 0, rate: 1, rateLive: 1, adf: 1, adAvoid: 1 };  // adBlock=短插播块过滤(默认开)  // adf=广告过滤; adAvoid=优先避开"画面带烧录广告"的源(默认开)
+var PS = { ratio: 0, buf: 'normal', to: 12, autoSw: 1, osd: 1, cross: 1, desc: 0, rate: 1, silent: 0 };
+var PS_DEF = { ratio: 0, buf: 'normal', to: 12, autoSw: 1, osd: 1, cross: 1, desc: 0, rate: 1, rateLive: 1, adf: 1, adAvoid: 1, silent: 0 };  // adBlock=短插播块过滤(默认开)  // adf=广告过滤; adAvoid=优先避开"画面带烧录广告"的源(默认开)
 var RATES = [1, 1.25, 1.5, 2, 0.75];
 function psLoad(){
   // ① 先铺一遍默认值 —— 以前只做"存过的键覆盖", 于是**新加的设置项默认值永远不生效**:
@@ -3682,6 +3684,14 @@ resetUiState();
  * App 侧一个分支都不会进 —— 改网页端不会碰到 App 的行为。
  */
 function webV(){ return $('video'); }
+/** 网页端: 静默提示开关(默认开 = 只留"有用/出错"的提示) */
+function syncSilentUI(){ var b = $('psSilent'); if (b) b.textContent = PS.silent ? '开' : '关'; }
+function webToggleSilent(){
+  PS.silent = PS.silent ? 0 : 1;
+  try { psSave(); } catch(e){}
+  syncSilentUI();
+  try { PK.toast(PS.silent ? '已开启静默提示' : '已关闭静默提示'); } catch(e){}
+}
 function webVol(){ var v = webV(); return v ? (v.muted ? 0 : (v.volume || 0)) : 1; }
 function webSetVolume(x, silent){
   var v = webV(); if (!v) return;
@@ -3828,7 +3838,30 @@ function applyWebMode(){
       top.insertBefore(b, setBtn || null);
     }
   } catch(e){}
-  // ④ 音量条: PC 上没有"上下滑改音量"的手势, 没这个就等于没法调音量
+  // ④ 静默提示(网页端默认开): "已定位到…/正在探测 N 条线路…/按上次记录直接播…"这些例行提示
+  //    观影时一直往画面上跳, 很影响体验。压掉例行提示, 只留"出错/需要你动手"的那些;
+  //    设置里可以关掉这个开关(关掉后一切照旧, 一行提示都不省)。
+  try {
+    if (PS.silent === undefined) PS.silent = 1;
+    var KEEP = /(失败|不通|播不动|错误|异常|超时|不支持|无法|没|403|404|5\d\d|开声音|静音|解锁|已锁|锁定|试了|都放不动)/;
+    var _sg = showGest, _ts = PK.toast;
+    showGest = function (t) { try { if (PS.silent && !KEEP.test(String(t))) return; } catch (e) {} _sg(t); };
+    PK.toast = function (t) { try { if (PS.silent && !KEEP.test(String(t))) return; } catch (e) {} _ts(t); };
+  } catch (e) {}
+  try {
+    var psetS = $('pset');
+    if (psetS && !$('psSilentRow')) {
+      var rowS = document.createElement('div');
+      rowS.className = 'skiprow'; rowS.id = 'psSilentRow';
+      rowS.innerHTML = '<label>静默提示</label><button class="pbtn" id="psSilent" onclick="webToggleSilent()">开</button>'
+        + '<span class="dim" style="font-size:12px">关掉后「已定位/正在探测」这类例行提示会全部显示</span>';
+      var headS = psetS.querySelector('h3');
+      if (headS) psetS.insertBefore(rowS, headS.nextSibling); else psetS.appendChild(rowS);
+      syncSilentUI();
+    }
+  } catch (e) {}
+
+  // ⑤ 音量条: PC 上没有"上下滑改音量"的手势, 没这个就等于没法调音量
   try {
     var pset = $('pset');
     if (pset && !$('psVolRow')) {
