@@ -71,26 +71,6 @@ function unb64u(s) {
  *   · 分片(其它)          → /p(取字节, 透传 Range)
  * r/c(Referer/Cookie) 一起带下去: 防盗链的源全靠它。
  */
-function proxify(uri, base, origin, token, r, c) {
-  let abs;
-  try { abs = /^https?:/i.test(uri) ? uri : new URL(uri, base).toString(); } catch (e) { return uri; }
-  const looksPl = /\.m3u8(\?|$)/i.test(abs) || !/\.[a-z0-9]{2,4}(\?|$)/i.test(abs);
-  return origin + (looksPl ? '/f' : '/p') + '?t=' + encodeURIComponent(token) + '&q=' + b64u(abs)
-    + (r ? '&r=' + encodeURIComponent(r) : '') + (c ? '&c=' + encodeURIComponent(c) : '');
-}
-function rewritePlaylist(text, base, origin, token, r, c) {
-  const out = String(text).split(/\r?\n/).map(line => {
-    const t = line.trim();
-    if (!t) return line;
-    if (t.charAt(0) === '#') {
-      const m = /URI="([^"]+)"/.exec(t);
-      return m ? line.replace(m[1], proxify(m[1], base, origin, token, r, c)) : line;
-    }
-    return proxify(t, base, origin, token, r, c);
-  });
-  return out.join('\n');
-}
-
 export default {
   async fetch(req) {
     const url = new URL(req.url);
@@ -152,25 +132,8 @@ export default {
       const why = (e && (e.name === 'AbortError' || /abort/i.test(e.message || ''))) ? '上游 12 秒没响应(超时)' : ('上游取回失败: ' + e.message);
       return new Response(why, { status: 504, headers: CORS });
     }
-    const ct = up.headers.get('Content-Type') || '';
-    // 清单: 就地改写成继续走本 Worker(页面那边的 Service Worker 过期也不影响播放)
-    if (url.pathname === '/f' && (up.status === 200) && (/mpegurl/i.test(ct) || /\.m3u8(\?|$)/i.test(t.pathname) || !/\.[a-z0-9]{2,4}(\?|$)/i.test(t.pathname))) {
-      // 先按字节取回来再判断是不是清单 —— 直接 .text() 会把"其实不是清单"的二进制解坏
-      const buf = await up.arrayBuffer();
-      const head = new TextDecoder().decode(buf.slice(0, 7));
-      if (head === '#EXTM3U') {
-        const text = new TextDecoder().decode(buf);
-        const body = rewritePlaylist(text, t.toString(), new URL(req.url).origin, TOKEN, r, c);
-        return new Response(body, {
-          status: 200,
-          headers: Object.assign({}, CORS, { 'Content-Type': 'application/vnd.apple.mpegurl' })
-        });
-      }
-      const h2 = new Headers(CORS);
-      if (ct) h2.set('Content-Type', ct);
-      h2.set('Accept-Ranges', up.headers.get('Accept-Ranges') || 'bytes');
-      return new Response(buf, { status: up.status, headers: h2 });
-    }
+    // 只透传, **不改写清单**: 清单的清洗与改写由页面里的 Service Worker 负责(它在用户本机跑,
+    // 出口就是用户自己的网络 —— 国内 CDN 只认这个; 放到 Worker 上改写会把分片也拖到海外出口, 直接 403)。
     const out = new Headers(CORS);
     ['Content-Type', 'Content-Length', 'Content-Range', 'Accept-Ranges', 'Cache-Control', 'Last-Modified']
       .forEach(k => { const v = up.headers.get(k); if (v) out.set(k, v); });
