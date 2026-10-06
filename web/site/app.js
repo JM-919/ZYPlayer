@@ -485,8 +485,8 @@ function renderDetail(){
   document.getElementById('v-detail').innerHTML = h;
   var b = '';
   for (var j = 0; j < eps.length; j++) {
-    b += '<button id="ep-' + j + '" onclick="playEp(' + j + ')">' + esc(eps[j].name)
-      + (isSeen(it.name, eps[j].name) ? ' <span style="color:#8ff0b4">✓</span>' : '') + '</button>';
+    b += '<button id="ep-' + j + '" onclick="playEp(' + j + ')">' + esc(epLabel(eps[j], j))
+      + (isSeen(it.name, epLabel(eps[j], j)) ? ' <span style="color:#8ff0b4">✓</span>' : '') + '</button>';
   }
   var boxE = document.getElementById('epsBox');
   boxE.className = 'eps' + (eps.length > 30 ? ' fold' : '');
@@ -500,6 +500,23 @@ function renderDetail(){
   }
   curEp = 0;
   fillPlaylist();
+}
+
+/**
+ * 选集按钮的文案。
+ *   踩过的坑: 有的源(如 TXNQ 追剧)返回的分集名字是**空字符串**, 于是按钮只剩一个序号、
+ *   看着像"这一格是空的"(用户截图里那种一排排空洞); 名字里本来就带集号的(「第01集」)
+ *   再补一个 "1. " 又太挤, 会被截成「1. 第0…」。
+ */
+function epLabel(ep, j) {
+  var n = String((ep && ep.name) || '').trim();
+  if (!n) return '第' + (j + 1) + '集';
+  return n;
+}
+function epLabelList(ep, j) {
+  var n = epLabel(ep, j);
+  if (/第\s*\d+/.test(n) || /^\s*\d+\s*[集话期]?\s*$/.test(n)) return n;   // 名字里已有集号就别重复
+  return (j + 1) + '. ' + n;
 }
 
 /* 播放器侧栏「选集」—— 这一块之前一直是空的 */
@@ -517,8 +534,9 @@ function fillPlaylist(){
   if (!curItem || !curItem.eps || !curItem.eps.length) { box.innerHTML = '<div class="empty">没有可播地址</div>'; return; }
   var eps = curItem.eps, b = '';
   for (var j = 0; j < eps.length; j++) {
-    b += '<button id="pep-' + j + '" class="' + (j === curEp ? 'cur' : '') + '" onclick="playEp(' + j + ')">' + (j + 1) + '. ' + esc(eps[j].name)
-      + (isSeen(curItem.name, eps[j].name) ? ' <span style="color:#8ff0b4">✓</span>' : '') + '</button>';
+    var lbl = epLabelList(eps[j], j);
+    b += '<button id="pep-' + j + '" class="' + (j === curEp ? 'cur' : '') + '" onclick="playEp(' + j + ')">' + esc(lbl)
+      + (isSeen(curItem.name, epLabel(eps[j], j)) ? ' <span style="color:#8ff0b4">✓</span>' : '') + '</button>';
   }
   box.innerHTML = b;
 }
@@ -713,8 +731,9 @@ function histTick(){
   var rec = histOf(curItem.name);
   var seen = (rec && rec.seen) ? rec.seen.slice() : [];
   var dur = v.duration || 0, pos = v.currentTime || 0;
-  if (dur > 0 && pos / dur >= 0.9 && seen.indexOf(ep.name) < 0) seen.push(ep.name);
-  histPut({ epIdx: curEp, epName: ep.name, pos: Math.floor(pos), dur: Math.floor(dur), seen: seen });
+  var _epn = epLabel(ep, curEp);
+  if (dur > 0 && pos / dur >= 0.9 && seen.indexOf(_epn) < 0) seen.push(_epn);
+  histPut({ epIdx: curEp, epName: _epn, pos: Math.floor(pos), dur: Math.floor(dur), seen: seen });
 }
 function isSeen(name, epName){
   var r = histOf(name);
@@ -1190,10 +1209,10 @@ function playEp(i){
   // 同一集重进 = 接着上次看(>5 秒才定位, 免得刚点开就被拖走)。
   // 以前这里只把进度"写回记录"、并没有真的 seek, 于是"看到一半退出去再进来又从 0 开始"。
   if (_sameEp && (_rec0.pos || 0) > 5) { pendingSeek = _rec0.pos; pendSeekEp = i; }
-  histPut({ epIdx: i, epName: ep.name, pos: _sameEp ? (_rec0.pos || 0) : 0,
+  histPut({ epIdx: i, epName: epLabel(ep, i), pos: _sameEp ? (_rec0.pos || 0) : 0,
             dur: _sameEp ? (_rec0.dur || 0) : 0 });
   document.getElementById('player').className = 'on';
-  document.getElementById('ptitle').textContent = curItem.name + ' · ' + ep.name;
+  document.getElementById('ptitle').textContent = curItem.name + ' · ' + epLabel(ep, i);
   setBig('wait');
   try { PK.playerOpen(true); } catch(e){}
   showLoad('正在连接…');
