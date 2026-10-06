@@ -1,5 +1,16 @@
 # Changelog (web edition)
 
+## 2026-10-07 (evening) · Douban-driven home + blog-style responsive layout
+
+* **Home/refresh now use Douban collections** (now showing / hot movies / hot TV / variety / anime):
+  the home page no longer depends on any scraper source. Tapping an item searches all sources by title
+  and opens the first same-title result.
+* **Removed the tiny `vdev` badge**: the build check still runs quietly (auto-reload when idle,
+  console note while watching).
+* **Web defaults**: silent hints ON, on-screen OSD OFF, avoid burned-in-ad sources OFF.
+* **Blog-style responsive layout**: natural document scrolling, 1080px container, fluid
+  `repeat(auto-fill,minmax(...))` grids, breakpoints 560/720/880/1180 (same approach as felixdsh2.eu.cc).
+
 ## 2026-10-07 · VOD-only: live TV removed, new skin reverted
 
 * **Live TV removed from the web edition entirely**: the top-bar entry, the live page, the channel tables and
