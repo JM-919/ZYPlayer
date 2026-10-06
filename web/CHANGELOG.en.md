@@ -1,5 +1,12 @@
 # Changelog (web edition)
 
+### Fix · Douban posters were blank (2026-10-07 late night)
+
+* The API returns `cover.url` (**no `pic` field**), so the card `src` was always empty;
+* Even with the right URL, Douban's image CDN gates on `Referer` (none → 418, our origin → 403, douban → 200)
+  and an `<img>` cannot set it — posters now go through the proxy (`/p?...&r=https://m.douban.com/`),
+  with the Worker/relay filling the Referer server-side. Verified: `200 · 53,132 B · image/jpeg`.
+
 ## 2026-10-07 (evening) · Douban-driven home + blog-style responsive layout
 
 * **Home/refresh now use Douban collections** (now showing / hot movies / hot TV / variety / anime):
