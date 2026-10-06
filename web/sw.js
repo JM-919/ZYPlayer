@@ -42,6 +42,40 @@ function q(url) {
     t: u.searchParams.get('t') || ''
   };
 }
+/* 上游要不要走 CORS 代理(Cloudflare Worker):
+   直播源/部分片源**没有 CORS 头**, Service Worker 直接 fetch 会拿到不透明响应(读不到字节) ——
+   表现就是"视频黑屏、直播完全看不了"。由 Worker 去取就没这个问题, 顺带还能代填 Referer/UA。
+   配置来源两条: ① 页面 bridge.js 用 postMessage 送过来(能带上运行时改过的值); ② 自己读 /webconfig.js 兜底。 */
+let PROXY = '', PROXY_TOKEN = 'zyweb', cfgTried = false;
+function normProxy(p) {
+  p = String(p || '').trim().replace(/\/+$/, '');
+  if (p && !/^[a-z][a-z0-9+.-]*:\/\//i.test(p)) p = 'https://' + p;
+  return p;
+}
+async function loadCfgFile() {
+  if (cfgTried || PROXY) return;
+  cfgTried = true;
+  try {
+    const txt = await (await fetch('/webconfig.js', { cache: 'no-store' })).text();
+    const mp = /proxy:\s*saved\.proxy\s*\|\|\s*'([^']*)'/.exec(txt) || /proxy:\s*'([^']*)'/.exec(txt);
+    const mt = /token:\s*saved\.token\s*\|\|\s*'([^']*)'/.exec(txt) || /token:\s*'([^']*)'/.exec(txt);
+    if (mp) PROXY = normProxy(mp[1]);
+    if (mt && mt[1]) PROXY_TOKEN = mt[1];
+  } catch (e) {}
+}
+self.addEventListener('message', event => {
+  const d = event.data || {};
+  if (d.type === 'proxycfg') {
+    const p = normProxy(d.proxy);
+    if (p) PROXY = p;
+    if (d.token) PROXY_TOKEN = String(d.token);
+  }
+});
+function proxyUrl(u, path, r, c) {
+  return PROXY + path + '?t=' + encodeURIComponent(PROXY_TOKEN) + '&q=' + b64u(u)
+    + (r ? '&r=' + encodeURIComponent(r) : '') + (c ? '&c=' + encodeURIComponent(c) : '');
+}
+
 function isM3u8(url, ctype) {
   return /\.m3u8(\?|$)/i.test(url) || /mpegurl/i.test(ctype || '');
 }
@@ -86,19 +120,34 @@ self.addEventListener('fetch', event => {
 async function handle(request, url) {
   const { u, r, c } = q(url.toString());
   if (!u) return new Response('bad request', { status: 400 });
+  await loadCfgFile();
   const headers = {};
   if (r) headers['Referer'] = r;
   if (c) headers['Cookie'] = c;
   const range = request.headers.get('Range');
   if (range) headers['Range'] = range;
-  let upstream;
-  try {
-    upstream = await fetch(u, { headers, redirect: 'follow' });
-  } catch (e) {
-    return new Response('upstream failed: ' + e.message, { status: 502 });
+
+  // 看起来像清单吗? 带 .m3u8 后缀 -> 是; 完全没有后缀(很多直播地址长这样) -> 也按清单试一次
+  const looksPlaylist = /\.m3u8(\?|$)/i.test(u) || !/\.[a-z0-9]{2,4}(\?|$)/i.test(u);
+  const useF = !!PROXY && looksPlaylist;                 // /f = 取文本(清单)
+  const useP = !!PROXY && !looksPlaylist;                // /p = 取字节(分片, 透传 Range)
+
+  let upstream = null;
+  async function tryFetch(target, hdrs) {
+    return await fetch(target, { headers: hdrs || {}, redirect: 'follow', mode: 'cors' });
   }
+  try {
+    if (useF) upstream = await tryFetch(proxyUrl(u, '/f', r, c), {});
+    else if (useP) upstream = await tryFetch(proxyUrl(u, '/p', r, c), range ? { Range: range } : {});
+  } catch (e) { upstream = null; }
+  if (!upstream || !upstream.ok) {
+    try { upstream = await fetch(u, { headers, redirect: 'follow' }); } catch (e) {
+      return new Response('upstream failed: ' + e.message, { status: 502 });
+    }
+  }
+
   const ctype = upstream.headers.get('Content-Type') || '';
-  if (isM3u8(u, ctype) || /#EXTM3U/.test(await Promise.resolve(''))) {
+  if (isM3u8(u, ctype) || looksPlaylist) {
     const text = await upstream.text();
     if (text.indexOf('#EXTM3U') >= 0) {
       const res = rewrite(text, u, r, c);
@@ -107,6 +156,8 @@ async function handle(request, url) {
         headers: { 'Content-Type': 'application/vnd.apple.mpegurl', 'Access-Control-Allow-Origin': '*' }
       });
     }
+    // 不是清单(有些直播是 flv/ts): 原样回给播放器, 别把字节丢掉
+    return new Response(text, { status: upstream.status, headers: { 'Content-Type': ctype || 'application/octet-stream', 'Access-Control-Allow-Origin': '*' } });
   }
   // 普通文件: 透传字节(保留状态码与关键头)
   const h = new Headers();
