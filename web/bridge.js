@@ -422,11 +422,25 @@
   var SWTOKEN = Math.random().toString(16).slice(2, 10);
   function proxyWrap(url, referer, cookie) {
     if (!url) return url;
-    if (!root.navigator || !root.navigator.serviceWorker || !root.navigator.serviceWorker.controller) return url;
+    var s0 = String(url);
+    var base = '';
+    try { base = location.origin + location.pathname.replace(/[^/]*$/, ''); } catch (e) {}
+    // ① 已经是"本代理地址"就别再套一层 —— 直播线路在 startLiveChannel 里先包过一次, 再包一层
+    //    就变成"代理的代理", 播放器直接播不动。安卓端靠 127.0.0.1 判断躲过了这个问题, 网页端漏了。
+    if (base && s0.indexOf(base + 'p?') === 0) return url;
+    // ② Service Worker 还没接管(首次打开/刚更新)时不能返回裸地址: 浏览器直连上游普遍缺 CORS 头,
+    //    直播就是"黑屏"。这时退回直接走 Cloudflare 代理, 至少能拿到字节。
+    if (!root.navigator || !root.navigator.serviceWorker || !root.navigator.serviceWorker.controller) {
+      if (!ZYPROXY) return url;
+      var looksPl = /\.m3u8(\?|$)/i.test(s0) || !/\.[a-z0-9]{2,4}(\?|$)/i.test(s0);
+      return ZYPROXY + (looksPl ? '/f' : '/p') + '?t=' + encodeURIComponent(PROXY_TOKEN) + '&q=' + b64u(url)
+        + (referer ? '&r=' + encodeURIComponent(referer) : '')
+        + (cookie ? '&c=' + encodeURIComponent(cookie) : '');
+    }
     var q = 'p?t=' + SWTOKEN + '&q=' + b64u(url);
     if (referer) q += '&r=' + encodeURIComponent(referer);
     if (cookie) q += '&c=' + encodeURIComponent(cookie);
-    return location.origin + location.pathname.replace(/[^/]*$/, '') + q;
+    return base + q;
   }
 
   /* ------------------------------------------------------------------ 桥 */
