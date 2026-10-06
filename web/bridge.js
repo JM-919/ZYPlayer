@@ -425,15 +425,28 @@
         });
       });
     },
+    /**
+     * 首页 = **豆瓣榜单**(用户要求):
+     *   · 好处: 首页不再依赖任何采集源(源全挂首页也还在), 刷新就是重新拉一次榜单;
+     *   · 榜单项只有片名/海报/评分(没有源与 id), 点进去由 app.js 按片名去聚合搜索再进详情;
+     *   · 翻页用豆瓣的 start/count(「加载更多」照旧可用)。
+     */
     home: function (siteKey, typeId, page, seq) {
-      var s = siteOf(siteKey);
-      var u = apiUrl(s, 'ac=videolist' + (typeId ? ('&t=' + enc(typeId)) : '') + '&pg=' + (page || 1));
-      fetchText(u, { referer: s.api + '/' }).then(function (txt) {
+      var COLL = { '': 'movie_showing', '1': 'movie_hot', '2': 'tv_hot', '3': 'tv_variety_show', '4': 'tv_anime' };
+      var cid = COLL[String(typeId == null ? '' : typeId)] || 'movie_hot';
+      var pg = Math.max(1, parseInt(page || 1, 10) || 1);
+      var u = 'https://m.douban.com/rexxar/api/v2/subject_collection/' + cid
+        + '/items?start=' + ((pg - 1) * 20) + '&count=20&for_mobile=1';
+      fetchText(u, { referer: 'https://m.douban.com/' }).then(function (txt) {
         var j = toJson(txt) || {};
-        var items = (j.list || []).map(function (v) {
-          return { site: s.key, siteName: s.name, id: String(v.vod_id || ''), name: v.vod_name || '',
-                   pic: v.vod_pic || '', remarks: v.vod_remarks || '', year: v.vod_year || '', eps: [] };
-        });
+        var list = j.subject_collection_items || j.items || [];
+        var items = list.map(function (v) {
+          var pic = (v.pic && (v.pic.normal || v.pic.large || v.pic)) || '';
+          var score = (v.rating && v.rating.value) ? String(v.rating.value) : '';
+          var sub = v.card_subtitle || v.year || '';
+          return { name: v.title || '', pic: pic, score: score, remarks: String(sub), year: String(v.year || ''),
+                   douban: 1, url: v.url || '', site: '', id: '', eps: [] };
+        }).filter(function (x) { return x.name; });
         call('onVodHome', seq, items);
       }).catch(function () { call('onVodHome', seq, []); });
     },
@@ -700,36 +713,8 @@
   /* ---------------------------------------------------------------- 版本自检 / 缓存自救
      背景: 改完代码"界面一点没变"这件事, 前后被浏览器缓存、Cloudflare 边缘缓存坑过好几轮。
      现在构建产物带指纹(__ZYBUILD + 静态资源 ?v= + /version.json), 页面自己会发现新旧不一致,
-     并且给一个明确可点的"刷新到新版"入口 —— 用户不用记得按 Ctrl+Shift+R。 */
+     没在看片时直接换成新版; 正在看片就不打扰(只在控制台说一句)。 */
   function buildStamp() { try { return String(root.__ZYBUILD || ''); } catch (e) { return ''; } }
-  function showVersionTag() {
-    try {
-      var doc = root.document;
-      if (!doc || doc.getElementById('zyver')) return;
-      var h1 = doc.querySelector('header h1');
-      if (!h1) return;
-      var d = doc.createElement('span');
-      d.id = 'zyver';
-      d.className = 'dim';
-      d.style.cssText = 'font-size:10px;opacity:.65;margin-left:7px;vertical-align:middle';
-      d.textContent = 'v' + (buildStamp().slice(-6) || 'dev');
-      h1.parentNode.insertBefore(d, h1.nextSibling);
-    } catch (e) {}
-  }
-  function showUpdateHint(remote) {
-    try {
-      var doc = root.document;
-      if (!doc || doc.getElementById('zynewver')) return;
-      var d = doc.createElement('div');
-      d.id = 'zynewver';
-      d.textContent = '🔄 网页版有新版本，点这里刷新';
-      d.style.cssText = 'position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:99;'
-        + 'background:linear-gradient(180deg,#6f5bff,#4a36d6);color:#fff;font-size:13px;font-weight:600;'
-        + 'padding:10px 16px;border-radius:999px;box-shadow:0 10px 30px rgba(0,0,0,.45);cursor:pointer';
-      d.onclick = function () { try { root.location.reload(); } catch (e) {} };
-      doc.body.appendChild(d);
-    } catch (e) {}
-  }
   function checkBuild() {
     var cur = buildStamp();
     if (!cur) return;
@@ -741,11 +726,10 @@
         var playing = pl && ('' + pl.className).indexOf('on') >= 0;
         // 没在看片就直接换新版(不留旧版); 看片中只提示, 不打断
         if (!playing) { try { root.location.reload(); } catch (e) {} return; }
-        showUpdateHint(j.v);
+        console.log('[ZY影视 网页版] 有新版本(' + j.v + ')，刷新即更新');
       }).catch(function () {});
   }
   try {
-    showVersionTag();
     setTimeout(checkBuild, 3000);
     setInterval(checkBuild, 5 * 60 * 1000);
     if (root.document) root.document.addEventListener('visibilitychange', function () {
