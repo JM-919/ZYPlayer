@@ -465,11 +465,11 @@
     var s0 = String(url);
     var base = '';
     try { base = location.origin + location.pathname.replace(/[^/]*$/, ''); } catch (e) {}
-    // ① 已经是"本代理地址"就别再套一层 —— 直播线路在 startLiveChannel 里先包过一次, 再包一层
-    //    就变成"代理的代理", 播放器直接播不动。安卓端靠 127.0.0.1 判断躲过了这个问题, 网页端漏了。
-    if (base && s0.indexOf(base + 'p?') === 0) return url;
-    // ①b 已经是"Worker 代理地址"同理: 再套一层会变成 Worker 去 fetch 它自己
-    //     (Cloudflare 会直接报错/递归), 直播就是这么整条链断掉的。
+    // ① 已经是"本代理地址"就别再套一层。必须 /f 和 /p 都认:
+    //    直播地址现在是指向同源 /f 的(Worker 改写过的清单), 只认 /p 的话它会再被包一层,
+    //    于是 Worker 收到"目标是自己"的请求 → 自引用 → Cloudflare 直接丢 522(用户截图里那个)。
+    if (base && (s0.indexOf(base + 'f?') === 0 || s0.indexOf(base + 'p?') === 0)) return url;
+    // ①b 跨域的 Worker 地址同理
     if (ZYPROXY && (s0.indexOf(ZYPROXY + '/f?') === 0 || s0.indexOf(ZYPROXY + '/p?') === 0)) return url;
     // ② Service Worker 还没接管(首次打开/刚更新)时不能返回裸地址: 浏览器直连上游普遍缺 CORS 头,
     //    直播就是"黑屏"。这时退回直接走 Cloudflare 代理, 至少能拿到字节。
@@ -760,22 +760,41 @@
     liveAuto: function () { if (!liveList().length) PK.liveRefresh(); },
     liveSweep: function () { call('onLiveSweep', '网页版不做线路测速'); },
     /**
-     * 线路探活。两个坑都在这里踩过, 所以现在只保留"最稳"的实现:
-     *   ① 以前回调 id 传的是**空串**, 而 playLive() 在 liveWait 里登记的是 'lv1'/'lv2'… ——
-     *      onLiveProbe 查不到记录直接 return, 表现就是「点了直播, 播放器永远出不来」;
-     *   ② 后来改成真去拉清单+超时深探, 逻辑是清楚了, 但网页端这一层没有原生那套探测能力,
-     *      多一层异步就多一个"卡住不回调"的机会。现在**同步回调**, 保证播放器一定起来:
-     *      全部线路按 HLS 候选回报, 播不动时 App 自己的自动换线会接着试下一条。
+     * 线路探活。踩过的坑按顺序都在这里:
+     *   ① 回调 id 传空串 → playLive 的 liveWait 永远等不到 → 播放器出不来;
+     *   ② 改成异步真探之后没有兜底, 上游卡住就永远不回调 → 又出不来;
+     *   ③ 为了"保证回调"改成乐观地把所有线路都标 ok → 第一条就是死的, 用户看到
+     *      「线路1 ✓ (加载失败)」然后干等 —— 截图里就是这个。
+     * 现在: 真探(每条 5 秒超时, 认 #EXTM3U), **并且 6 秒必回调**(兜底), 坏线路会被标成 ✗,
+     * 播放器直接挑能通的先播。
      */
     liveProbe: function (id, urlsJson) {
       var urls = [];
       try { urls = JSON.parse(urlsJson) || []; } catch (e) {}
-      var out = [];
-      for (var i = 0; i < urls.length && i < 8; i++) {
-        if (!/^https?:\/\//i.test(String(urls[i] || ''))) continue;
-        out.push({ u: String(urls[i]), ok: true, k: 'm3u8', c: 200, ms: 0 });
+      urls = urls.slice(0, 8).filter(function (u) { return /^https?:\/\//i.test(String(u || '')); });
+      var out = [], done = 0, sent = false;
+      function finish() {
+        if (sent) return;
+        sent = true;
+        call('onLiveProbe', id, JSON.stringify(out));
       }
-      call('onLiveProbe', id, JSON.stringify(out));
+      if (!urls.length) { finish(); return; }
+      var failsafe = setTimeout(finish, 6000);            // 兜底: 无论如何 6 秒内一定回调
+      urls.forEach(function (u) {
+        var t0 = Date.now(), settled = false;
+        function one(txt, ok) {
+          if (settled) return;
+          settled = true;
+          var s = String(txt || '');
+          var isM3u8 = s.indexOf('#EXTM3U') >= 0;
+          out.push({ u: String(u), ok: isM3u8, k: isM3u8 ? 'm3u8' : (ok ? 'ok' : ''), c: ok ? 200 : 0, ms: Date.now() - t0 });
+          if (++done === urls.length) { clearTimeout(failsafe); finish(); }
+        }
+        var to = setTimeout(function () { one('', false); }, 5000);
+        var ref = String(u).replace(/^(https?:\/\/[^\/]+).*$/, '$1/');
+        fetchText(u, { referer: ref }).then(function (t) { clearTimeout(to); one(t, true); })
+          .catch(function () { clearTimeout(to); one('', false); });
+      });
     },
     liveAddSource: function (name, url) {
       var u = userLive(); u.push({ name: name || '自加', url: url }); saveUserLive(u);
