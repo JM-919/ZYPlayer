@@ -217,34 +217,22 @@
   /* ------------------------------------------------------------------ 直播表 */
   // 与安卓端 Live.java 的 FEEDS 保持一致(那边有的这里都要有, 否则"网页端频道少一半").
   // ua 是有些源点名要的(否则直接被挡), 走代理时代理会带着它去取.
+  // 直播表(**只留实测"浏览器能直接播"的**): 2026-10 逐条真测 —— 取表里前 10 条 https 线路,
+  // 带 Origin 头直接请求, 只有返回 #EXTM3U 且带 CORS 头的才算"浏览器能直接播"。
+  // 低于 3 条可播的表(ottiptv 系、migu、szyyds、guovin、rihou 等)全部删掉: 在网页里点了就是黑屏,
+  // 留着只会让用户以为播放器坏了。(App 侧不受影响, 它用原生代理, 那些表都还能用。)
   var LIVE_FEEDS = [
-    { name: 'vbskycn', urls: ['https://raw.githubusercontent.com/vbskycn/iptv/master/tv/iptv4.m3u'] },
-    { name: 'jiandantv', urls: ['https://raw.githubusercontent.com/jiandantv/IPTV2026/main/live.m3u'] },
-    { name: 'bilibili-live', urls: ['https://sub.ottiptv.cc/bililive.m3u'], ua: 'okHttp/Mod-1.5.0.0' },
-    { name: 'huya', urls: ['https://sub.ottiptv.cc/huyayqk.m3u'], ua: 'okHttp/Mod-1.5.0.0' },
-    { name: 'douyu', urls: ['https://sub.ottiptv.cc/douyuyqk.m3u'], ua: 'okHttp/Mod-1.5.0.0' },
-    { name: 'yy-lunbo', urls: ['https://sub.ottiptv.cc/yylunbo.m3u'], ua: 'okHttp/Mod-1.5.0.0' },
-    { name: 'singer', urls: ['https://mgtv.ottiptv.cc/mglist.m3u'], ua: 'okhttp/3.15' },
-    { name: 'baohe', urls: ['https://bh.bhkj.de5.net/cs.php'], ua: 'okhttp/5.3.2' },
-    { name: 'smt', urls: ['https://bh.bhkj.de5.net/smt2.txt'] },
-    { name: 'migu1', urls: ['http://139.224.44.53:1234'] },
-    { name: 'migu3', urls: ['http://117.72.81.53:3000'] },
-    { name: 'junyu', urls: ['http://cs.junyu2017.de5.net/index.php?token=b078d8a2&type=m3u'] },
-    { name: 'iptv-org-cn', urls: ['https://iptv-org.github.io/iptv/countries/cn.m3u'] },
-    { name: 'okay-iptv4', urls: ['https://raw.githubusercontent.com/songlees355-wq/okay/main/IPTV4%E6%B5%8B%E8%AF%95.txt'] },
-    { name: 'okay-abroad', urls: ['https://raw.githubusercontent.com/songlees355-wq/okay/main/%E5%9B%BD%E5%A4%96%E7%94%B5%E8%A7%86%E5%8F%B02026.txt'] },
-    { name: 'zonghe', urls: ['http://193.123.86.190:14888/TV/iptv.php'], ua: 'bingcha/1.1 (mianfeifenxiang)' },
-    // ↓ 从聚玩盒子 jsonlist(单仓) 抓下来并**逐条真测**过的(2026-10):
-    //   Worker 能取到、且里面有大量 https 频道 —— 这些才是网页端真能播的部分。
-    { name: 'guovin', urls: ['https://raw.githubusercontent.com/Guovin/iptv-api/gd/output/result.m3u'] },
-    { name: 'suxuang', urls: ['https://raw.githubusercontent.com/suxuang/myIPTV/main/ipv4.m3u'] },
-    { name: 'szyyds', urls: ['https://z.szyyds.cn/iptv'] },
+    { name: 'suxuang',    urls: ['https://raw.githubusercontent.com/suxuang/myIPTV/main/ipv4.m3u'] },
     { name: 'legal-iptv', urls: ['https://raw.githubusercontent.com/gambiarras/legal-iptv/refs/heads/main/playlist.m3u'] },
-    { name: 'bmch', urls: ['https://gh.halonice.com/https:/raw.githubusercontent.com/big-mouth-cn/tv/main/iptv-ok.m3u'] },
-    { name: 'rihou', urls: ['http://rihou.cc:555/ggg.nzk'] },
-    { name: 'aptv', urls: ['https://raw.githubusercontent.com/Kimentanm/aptv/master/m3u/iptv.m3u'] },
-    { name: 'szyyds-x', urls: ['https://szyyds.cn/tv/live/x.txt'] }
+    { name: 'baohe',      urls: ['https://bh.bhkj.de5.net/cs.php'], ua: 'okhttp/5.3.2' },
+    { name: 'aptv',       urls: ['https://raw.githubusercontent.com/Kimentanm/aptv/master/m3u/iptv.m3u'] },
+    { name: 'okay-abroad',urls: ['https://raw.githubusercontent.com/songlees355-wq/okay/main/%E5%9B%BD%E5%A4%96%E7%94%B5%E8%A7%86%E5%8F%B02026.txt'] },
+    { name: 'iptv-org-cn',urls: ['https://iptv-org.github.io/iptv/countries/cn.m3u'] },
+    { name: 'bmch',       urls: ['https://gh.halonice.com/https:/raw.githubusercontent.com/big-mouth-cn/tv/main/iptv-ok.m3u'] },
+    { name: 'vbskycn',    urls: ['https://raw.githubusercontent.com/vbskycn/iptv/master/tv/iptv4.m3u'] },
+    { name: 'zonghe',     urls: ['http://193.123.86.190:14888/TV/iptv.php'], ua: 'bingcha/1.1 (mianfeifenxiang)' }
   ];
+
   function userLive() {
     try { return JSON.parse(localStorage.getItem('zy_live') || '[]') || []; } catch (e) { return []; }
   }
