@@ -214,140 +214,6 @@
     });
   }
 
-  /* ------------------------------------------------------------------ 直播表 */
-  // 与安卓端 Live.java 的 FEEDS 保持一致(那边有的这里都要有, 否则"网页端频道少一半").
-  // ua 是有些源点名要的(否则直接被挡), 走代理时代理会带着它去取.
-  // 直播表(**只留实测"浏览器能直接播"的**): 2026-10 逐条真测 —— 取表里前 10 条 https 线路,
-  // 带 Origin 头直接请求, 只有返回 #EXTM3U 且带 CORS 头的才算"浏览器能直接播"。
-  // 低于 3 条可播的表(ottiptv 系、migu、szyyds、guovin、rihou 等)全部删掉: 在网页里点了就是黑屏,
-  // 留着只会让用户以为播放器坏了。(App 侧不受影响, 它用原生代理, 那些表都还能用。)
-  var LIVE_FEEDS = [
-    { name: 'suxuang',    urls: ['https://raw.githubusercontent.com/suxuang/myIPTV/main/ipv4.m3u'] },
-    { name: 'legal-iptv', urls: ['https://raw.githubusercontent.com/gambiarras/legal-iptv/refs/heads/main/playlist.m3u'] },
-    { name: 'baohe',      urls: ['https://bh.bhkj.de5.net/cs.php'], ua: 'okhttp/5.3.2' },
-    { name: 'aptv',       urls: ['https://raw.githubusercontent.com/Kimentanm/aptv/master/m3u/iptv.m3u'] },
-    { name: 'okay-abroad',urls: ['https://raw.githubusercontent.com/songlees355-wq/okay/main/%E5%9B%BD%E5%A4%96%E7%94%B5%E8%A7%86%E5%8F%B02026.txt'] },
-    { name: 'iptv-org-cn',urls: ['https://iptv-org.github.io/iptv/countries/cn.m3u'] },
-    { name: 'bmch',       urls: ['https://gh.halonice.com/https:/raw.githubusercontent.com/big-mouth-cn/tv/main/iptv-ok.m3u'] },
-    { name: 'vbskycn',    urls: ['https://raw.githubusercontent.com/vbskycn/iptv/master/tv/iptv4.m3u'] },
-    { name: 'zonghe',     urls: ['http://193.123.86.190:14888/TV/iptv.php'], ua: 'bingcha/1.1 (mianfeifenxiang)' }
-  ];
-
-  function userLive() {
-    try { return JSON.parse(localStorage.getItem('zy_live') || '[]') || []; } catch (e) { return []; }
-  }
-  function saveUserLive(a) { try { localStorage.setItem('zy_live', JSON.stringify(a)); } catch (e) {} }
-
-  function parseM3u(text) {
-    var out = [], lines = String(text).split(/\r?\n/), name = '', group = '', logo = '';
-    for (var i = 0; i < lines.length; i++) {
-      var t = lines[i].trim();
-      if (!t) continue;
-      if (t.indexOf('#EXTINF') === 0) {
-        var c = t.indexOf(',');
-        name = c > 0 ? t.substring(c + 1).trim() : '';
-        var g = /group-title="([^"]*)"/i.exec(t);
-        group = g ? g[1] : '';
-        var l = /tvg-logo="([^"]*)"/i.exec(t);
-        logo = l ? l[1] : '';
-      } else if (t.charAt(0) !== '#') {
-        if (name && /^https?:\/\//i.test(t)) out.push({ n: name, g: group || '未分组', logo: logo, u: [t] });
-        name = ''; group = ''; logo = '';
-      }
-    }
-    return out;
-  }
-  function parseTxt(text) {
-    var out = [], group = '未分组';
-    String(text).split(/\r?\n/).forEach(function (line) {
-      var t = line.trim();
-      if (!t) return;
-      var gm = /^(.+?)\s*,#genre#\s*$/.exec(t);
-      if (gm) { group = gm[1]; return; }
-      var i = t.indexOf(',');
-      if (i <= 0) return;
-      var name = t.substring(0, i).trim(), url = t.substring(i + 1).trim();
-      if (name && /^https?:\/\//i.test(url)) out.push({ n: name, g: group, logo: '', u: [url] });
-    });
-    return out;
-  }
-  function mergeChannels(map, ch) {
-    var k = ch.g + '|' + ch.n;
-    if (!map[k]) { map[k] = { n: ch.n, g: ch.g, logo: ch.logo, u: [] }; }
-    var m = map[k];
-    ch.u.forEach(function (u) { if (m.u.indexOf(u) < 0 && m.u.length < 12) m.u.push(u); });
-    return m;
-  }
-
-  var liveAll = null;
-  function liveRefresh(done) {
-    var feeds = LIVE_FEEDS.concat(userLive().map(function (x) { return { name: x.name, urls: [x.url] }; }));
-    var map = {}, got = 0, failed = 0;
-    var jobs = feeds.map(function (f) {
-      return fetchText(f.urls[0], { referer: '', ua: f.ua || '' }).then(function (txt) {
-        if (!txt || txt.length < 20) throw new Error('empty');
-        var list = txt.indexOf('#EXTM3U') >= 0 ? parseM3u(txt) : parseTxt(txt);
-        list.forEach(function (c) { mergeChannels(map, c); });
-        got++;
-      }).catch(function () { failed++; });
-    });
-    return Promise.all(jobs).then(function () {
-      var list = Object.keys(map).map(function (k) { return map[k]; });
-      if (!list.length) throw new Error('一个频道都没拉到(表都不可用?)');
-      liveAll = list;
-      try { localStorage.setItem('zy_live_cache', JSON.stringify(list)); } catch (e) {}
-      if (done) done({ count: list.length, tags: got + '/' + feeds.length });
-      return list;
-    });
-  }
-  /**
-   * 网页版"可播频道"筛选(用户点名的方案②):
-   *   https 页面里浏览器**禁止**加载 http 流(混合内容), 所以只保留"至少有一条 https 线路"的频道,
-   *   其余整条频道不展示 —— 免得点进去必然黑屏。App 侧不做这个筛选(它没这个限制)。
-   */
-  function webPlayable(channels) {
-    try {
-      var out = [];
-      for (var i = 0; i < channels.length; i++) {
-        var c = channels[i];
-        var https = (c.u || []).filter(function (u) { return /^https:/i.test(String(u)); });
-        if (!https.length) continue;
-        c = { n: c.n, g: c.g, u: https, best: c.best, good: c.good, x: c.x };
-        out.push(c);
-      }
-      return out;
-    } catch (e) { return channels; }
-  }
-
-  /** 网页端统一的频道列表: 只留 https 可播的频道, 并把 https 线路排前面 */
-  function webLiveList() {
-    var all0 = webPlayable(liveList() || []);
-    all0.forEach(sortLinesForWeb);
-    return all0;
-  }
-
-  /** 网页版: 把每条频道的线路按"浏览器可播性"重排(https 在前, 非标准端口的往后) */
-  function sortLinesForWeb(ch) {
-    try {
-      if (!ch || !ch.u || ch.u.length < 2) return ch;
-      var score = function (u) {
-        var s0 = String(u || '');
-        var https = /^https:/i.test(s0) ? 0 : 1;              // 混合内容: http 基本没戏
-        var port = (s0.match(/^https?:\/\/[^\/]+:(\d+)/) || [])[1];
-        var badPort = (port && ['80', '443', '8080', '8443'].indexOf(port) < 0) ? 1 : 0;
-        return https * 2 + badPort;
-      };
-      ch.u = ch.u.slice().sort(function (a, b) { return score(a) - score(b); });
-    } catch (e) {}
-    return ch;
-  }
-
-  function liveList() {
-    if (liveAll) return liveAll;
-    try { liveAll = JSON.parse(localStorage.getItem('zy_live_cache') || '[]') || []; } catch (e) { liveAll = []; }
-    return liveAll;
-  }
-
   /* ------------------------------------------------------------------ 豆瓣评分 */
   function doubanOne(name) {
     var key = String(name || '').replace(/\[[^\]]*\]/g, '').replace(/[（(][^）)]*[）)]/g, '').trim();
@@ -541,7 +407,7 @@
   };
 
   root.ZYBRIDGE = { search: search, detail: detail, allSites: allSites, sameTitle: sameTitle,
-                    fetchText: fetchText, analyze: analyze, liveRefresh: liveRefresh, doubanOne: doubanOne,
+                    fetchText: fetchText, analyze: analyze, doubanOne: doubanOne,
                     config: function () { return { proxy: ZYPROXY, token: PROXY_TOKEN, swToken: SWTOKEN }; } };
 
   var VOD = {
@@ -778,69 +644,6 @@
       });
       if (!names.length) call('onDouban', []);
     },
-    liveMeta: function () {
-      var l = webLiveList(), g = {}, order = [];
-      l.forEach(function (c) { if (!g[c.g]) { g[c.g] = 0; order.push(c.g); } g[c.g]++; });
-      return JSON.stringify({ ok: true, count: l.length, ts: Date.now(), tags: 'web', mirror: '', stale: false,
-        groups: order.map(function (n) { return { name: n, n: g[n] }; }) });
-    },
-    liveChannels: function (group) {
-      // 网页版的现实: https 页面里**不能混用 http 流**(混合内容), 而 Cloudflare 出口
-      // 又有端口白名单(8181/9901 这类直接 1003)与地区限制。所以把 https 线路排前面,
-      // 让"能播的那几条"先被尝到, 而不是一上来就撞最不可能通的一条。
-      var l = webLiveList();
-      return JSON.stringify(l.filter(function (c) { return !group || c.g === group; }));
-    },
-    liveRefresh: function () {
-      liveRefresh().then(function (l) { call('onLive', '频道表已更新: ' + l.length + ' 个频道'); })
-        .catch(function (e) { call('onLive', '更新失败: ' + e.message); });
-    },
-    liveAuto: function () { if (!liveList().length) PK.liveRefresh(); },
-    liveSweep: function () { call('onLiveSweep', '网页版不做线路测速'); },
-    /**
-     * 线路探活。踩过的坑按顺序都在这里:
-     *   ① 回调 id 传空串 → playLive 的 liveWait 永远等不到 → 播放器出不来;
-     *   ② 改成异步真探之后没有兜底, 上游卡住就永远不回调 → 又出不来;
-     *   ③ 为了"保证回调"改成乐观地把所有线路都标 ok → 第一条就是死的, 用户看到
-     *      「线路1 ✓ (加载失败)」然后干等 —— 截图里就是这个。
-     * 现在: 真探(每条 5 秒超时, 认 #EXTM3U), **并且 6 秒必回调**(兜底), 坏线路会被标成 ✗,
-     * 播放器直接挑能通的先播。
-     */
-    liveProbe: function (id, urlsJson) {
-      var urls = [];
-      try { urls = JSON.parse(urlsJson) || []; } catch (e) {}
-      urls = urls.slice(0, 8).filter(function (u) { return /^https?:\/\//i.test(String(u || '')); });
-      var out = [], done = 0, sent = false;
-      function finish() {
-        if (sent) return;
-        sent = true;
-        call('onLiveProbe', id, JSON.stringify(out));
-      }
-      if (!urls.length) { finish(); return; }
-      var failsafe = setTimeout(finish, 6000);            // 兜底: 无论如何 6 秒内一定回调
-      urls.forEach(function (u) {
-        var t0 = Date.now(), settled = false;
-        function one(txt, ok) {
-          if (settled) return;
-          settled = true;
-          var s = String(txt || '');
-          var isM3u8 = s.indexOf('#EXTM3U') >= 0;
-          out.push({ u: String(u), ok: isM3u8, k: isM3u8 ? 'm3u8' : (ok ? 'ok' : ''), c: ok ? 200 : 0, ms: Date.now() - t0 });
-          if (++done === urls.length) { clearTimeout(failsafe); finish(); }
-        }
-        var to = setTimeout(function () { one('', false); }, 5000);
-        var ref = String(u).replace(/^(https?:\/\/[^\/]+).*$/, '$1/');
-        fetchText(u, { referer: ref }).then(function (t) { clearTimeout(to); one(t, true); })
-          .catch(function () { clearTimeout(to); one('', false); });
-      });
-    },
-    liveAddSource: function (name, url) {
-      var u = userLive(); u.push({ name: name || '自加', url: url }); saveUserLive(u);
-      call('onLiveAddSource', name, JSON.stringify({ ok: true, msg: '已加入' }));
-    },
-    liveDelSource: function (name) { saveUserLive(userLive().filter(function (x) { return x.name !== name; })); },
-    liveUserSources: function () { return JSON.stringify(userLive()); },
-    liveForget: function () { try { localStorage.removeItem('zy_live_play'); } catch (e) {} },
     livePlay: function () { return ''; },
     // 网页版做不了的三件事: 如实返回失败, 让界面走兜底
     castSearch: function () { call('onCastList', []); toast('网页版不支持投屏(DLNA 需要原生 socket)'); },
@@ -952,18 +755,6 @@
 
   /* 详情页"封面做背景虚化": 皮肤里有 html.web body::after 用 --z-poster 做一层模糊背景。
      封面地址只有 DOM 里才知道, 所以这里盯一下 #v-detail, 一出现封面就写进 CSS 变量(纯网页端装饰)。 */
-  /** 直播页加一句"网页版能播什么"的说明 —— 免得用户以为播放器坏了 */
-  function liveHintOnce() {
-    try {
-      var d = root.document, el = d.getElementById('liveHint');
-      if (!el || el.getAttribute('data-zyweb')) return;
-      el.setAttribute('data-zyweb', '1');
-      el.innerHTML += '<br><b>网页版能播的直播很有限</b>：浏览器不允许 https 页面混用 http 流，'
-        + 'Cloudflare 出口还有端口白名单（8181/9901 这类端口取不到）与地区限制 —— '
-        + '国内 IPTV 大多落在这几条里，请在 App 里看；这里<b>只列出至少有一条 https 线路的频道</b>(http 的整条不展示)。';
-    } catch (e) {}
-  }
-
   function watchPoster() {
     try {
       var doc = root.document;
@@ -979,9 +770,6 @@
     } catch (e) {}
   }
   try { setTimeout(watchPoster, 800); } catch (e) {}
-  try {
-    setInterval(liveHintOnce, 1200);       // 直播页是动态渲染的, 轻量轮询一次就够了
-  } catch (e) {}
 
   root.VOD = VOD; root.PK = PK;
   root.ZY_onAdStats = function (s) { adDropped = s.dropped || adDropped; adNote = s.note || adNote; };
