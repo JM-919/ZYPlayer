@@ -417,19 +417,7 @@ function onVodDetail(items){
   for (var i = 1; i < srcList.length; i++) {
     if ((srcList[i].eps || []).length > (srcList[best].eps || []).length) best = i;
   }
-  // 网页端: 把"取不到(403/超时/无 CORS)"过的源往后排 —— 分集数只作次要权重
-  if (WEB && srcList.length > 1) {
-    try {
-      var _sc = [];
-      for (var _i = 0; _i < srcList.length; _i++) {
-        var _eps = (srcList[_i].eps || []).length;
-        _sc.push(_eps - webBadScore(srcList[_i].site) * Math.max(1, Math.floor(_eps * 0.25)));
-      }
-      var _b = 0;
-      for (var _j = 1; _j < _sc.length; _j++) if (_sc[_j] > _sc[_b]) _b = _j;
-      best = _b;
-    } catch(e) {}
-  }
+
   // 2026-10: 有些源把广告**烧进画面**(清单里没有广告分片/字幕轨, 过滤器碰不到) ——
   // 与其让用户看广告, 不如默认换一个"分集数差不多、且没有烧录广告"的源。开关在设置抽屉里。
   if (PS.adAvoid && srcList[best] && srcList[best].burnAd) {
@@ -1290,14 +1278,6 @@ function playEp(i){
       try { notePlayErr(d, playUrl); } catch(err){}   // 记下真实原因(网页端会把它在"都播不动"时显示出来)
       if (d && d.fatal) {
         try { showPlayErrLine(); } catch(err){}
-        try {
-          var _code = (d && d.response && (d.response.code || d.response.status)) || 0;
-          var _det = String((d && d.details) || '');
-          // 网页端: 403/网络类错误 = 这条源在浏览器里取不到, 记下来(下次优先避开; 播起来了会清掉)
-          if (WEB && curItem && curItem.site && (String(_code) === '403' || /manifestLoadError|networkError|manifestLoadTimeOut|levelLoadError/i.test(_det))) {
-            webBadNote(curItem.site, _code ? ('HTTP ' + _code) : _det);
-          }
-        } catch(err2){}
         autoSwitchSource('HLS:' + (d.details || ''));
         setBig('err');
         document.getElementById('ptitle').textContent = curItem.name + ' · ' + ep.name + (srcList.length > 1 ? ' (这条线路失效, 正在自动换源…)' : ' (加载失败)');
@@ -1867,7 +1847,6 @@ function fmt(s){
   // play 只在首次播放触发; 卡顿恢复走 playing, 所以必须监听它
   v.addEventListener('playing', function(){ hideLoad(); bufLoading(false); clearFailWatch(); failedSrc[srcIdx] = false; playedOk = true; applyRate(); syncBar(v);
     try { clearPlayErrLine(); } catch(e) {}     // 画面起来了, 把"播放失败"那行擦掉
-    try { if (curItem && curItem.site) webBadClear(curItem.site); } catch(e) {}   // 能播 = 这条源没问题, 撤销坏源标记
     if (nextTimer) cancelAutoNext(true);      // 用户又让画面动起来(比如往回拖) -> 别静默跳下一集
   });
   v.addEventListener('canplay', function(){ hideLoad(); bufLoading(false); syncBar(v); });
@@ -2687,29 +2666,6 @@ function onOrientation(land){
 
 /* ---------- 无感自动换源: 源失效/超时 -> 自动切下一个源并保持当前集 ---------- */
 var failedSrc = {}, autoSwitching = false, failWatch = null;
-/**
- * 网页端"这条源在浏览器里取不到"的记忆(存 localStorage)。
- * 为什么需要: 有些 CDN **只认国内家宽 IP**, 会拒绝 Cloudflare 出口(403); 而浏览器又读不到
- * 没有 CORS 头的跨域响应 —— 这类源在网页端就是播不了。与其每次都让用户撞一次 403,
- * 不如记住它, 下次选源时**优先避开**, 换源列表里也会标出来。
- * 只在网页端生效(APP 有原生代理, 没这个问题)。
- */
-var WEB_BAD_KEY = 'zy_web_bad_src';
-function webBadMap(){ try { return JSON.parse(localStorage.getItem(WEB_BAD_KEY) || '{}') || {}; } catch(e){ return {}; } }
-function webBadScore(site){ try { var m = webBadMap(); return (m[site] && m[site].n) || 0; } catch(e){ return 0; } }
-function webBadNote(site, why){
-  if (!WEB || !site) return;
-  try {
-    var m = webBadMap(), r = m[site] || { n: 0, t: 0, why: '' };
-    r.n++; r.t = Date.now(); r.why = String(why || '').slice(0, 60);
-    m[site] = r;
-    localStorage.setItem(WEB_BAD_KEY, JSON.stringify(m));
-  } catch(e){}
-}
-function webBadClear(site){
-  if (!WEB || !site) return;
-  try { var m = webBadMap(); if (m[site]) { delete m[site]; localStorage.setItem(WEB_BAD_KEY, JSON.stringify(m)); } } catch(e){}
-}
 var playedOk = false;   // 当前集是否已经出过画面
 /* 停滞看门狗: 光看"有没有出过画面"不够 —— 源可能出个首帧就冻住(黑屏/转圈不再动)。
    这里每 2 秒比一次 currentTime, 只要"没暂停、没在拖、也没解码报错"却长时间不往前走,
