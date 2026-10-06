@@ -162,7 +162,7 @@ function reloadHome(force){
     try { localStorage.setItem('zy_web_chart', curType || 'movie_showing'); } catch(e) {}
     paintChart();
   }
-  var ck = "pk_home_" + curSite + "_" + curType;
+  var ck = "pk_home_v2_" + curSite + "_" + curType;   // v2: 首页换成豆瓣榜单后, 老缓存(没海报)不能再吃
   var cached = null;
   if (!force) { try { cached = JSON.parse(localStorage.getItem(ck) || "null"); } catch(e){} }
   if (cached && cached.length) {
@@ -214,7 +214,7 @@ function onVodHome(seq, items){
   }
   $("load").textContent = (items && items.length ? "— 点这里加载更多 —" : "— 没有更多了 —");
   $("load").textContent = (items && items.length ? "— 点这里加载更多 —" : "— 没有更多了 —") + "   共 " + homeItems.length + " 部";
-  try { localStorage.setItem("pk_home_" + curSite + "_" + curType, JSON.stringify(homeItems.slice(0, 40))); } catch(e){}
+  try { localStorage.setItem("pk_home_v2_" + curSite + "_" + curType, JSON.stringify(homeItems.slice(0, 40))); } catch(e){}
   if (seq === forceSeq) { forceSeq = 0; try { PK.toast("已刷新 · " + homeItems.length + " 部"); } catch(e){} }
   fetchDouban(homeItems);
 }
