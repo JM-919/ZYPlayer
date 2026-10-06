@@ -205,14 +205,25 @@
   }
 
   /* ------------------------------------------------------------------ 直播表 */
+  // 与安卓端 Live.java 的 FEEDS 保持一致(那边有的这里都要有, 否则"网页端频道少一半").
+  // ua 是有些源点名要的(否则直接被挡), 走代理时代理会带着它去取.
   var LIVE_FEEDS = [
     { name: 'vbskycn', urls: ['https://raw.githubusercontent.com/vbskycn/iptv/master/tv/iptv4.m3u'] },
     { name: 'jiandantv', urls: ['https://raw.githubusercontent.com/jiandantv/IPTV2026/main/live.m3u'] },
-    { name: 'ott-bilibili', urls: ['https://sub.ottiptv.cc/bililive.m3u'] },
-    { name: 'ott-huya', urls: ['https://sub.ottiptv.cc/huyayqk.m3u'] },
-    { name: 'ott-douyu', urls: ['https://sub.ottiptv.cc/douyuyqk.m3u'] },
-    { name: 'ott-yy', urls: ['https://sub.ottiptv.cc/yylunbo.m3u'] },
-    { name: 'zonghe', urls: ['http://193.123.86.190:14888/TV/iptv.php'] }
+    { name: 'bilibili-live', urls: ['https://sub.ottiptv.cc/bililive.m3u'], ua: 'okHttp/Mod-1.5.0.0' },
+    { name: 'huya', urls: ['https://sub.ottiptv.cc/huyayqk.m3u'], ua: 'okHttp/Mod-1.5.0.0' },
+    { name: 'douyu', urls: ['https://sub.ottiptv.cc/douyuyqk.m3u'], ua: 'okHttp/Mod-1.5.0.0' },
+    { name: 'yy-lunbo', urls: ['https://sub.ottiptv.cc/yylunbo.m3u'], ua: 'okHttp/Mod-1.5.0.0' },
+    { name: 'singer', urls: ['https://mgtv.ottiptv.cc/mglist.m3u'], ua: 'okhttp/3.15' },
+    { name: 'baohe', urls: ['https://bh.bhkj.de5.net/cs.php'], ua: 'okhttp/5.3.2' },
+    { name: 'smt', urls: ['https://bh.bhkj.de5.net/smt2.txt'] },
+    { name: 'migu1', urls: ['http://139.224.44.53:1234'] },
+    { name: 'migu3', urls: ['http://117.72.81.53:3000'] },
+    { name: 'junyu', urls: ['http://cs.junyu2017.de5.net/index.php?token=b078d8a2&type=m3u'] },
+    { name: 'iptv-org-cn', urls: ['https://iptv-org.github.io/iptv/countries/cn.m3u'] },
+    { name: 'okay-iptv4', urls: ['https://raw.githubusercontent.com/songlees355-wq/okay/main/IPTV4%E6%B5%8B%E8%AF%95.txt'] },
+    { name: 'okay-abroad', urls: ['https://raw.githubusercontent.com/songlees355-wq/okay/main/%E5%9B%BD%E5%A4%96%E7%94%B5%E8%A7%86%E5%8F%B02026.txt'] },
+    { name: 'zonghe', urls: ['http://193.123.86.190:14888/TV/iptv.php'], ua: 'bingcha/1.1 (mianfeifenxiang)' }
   ];
   function userLive() {
     try { return JSON.parse(localStorage.getItem('zy_live') || '[]') || []; } catch (e) { return []; }
@@ -265,7 +276,7 @@
     var feeds = LIVE_FEEDS.concat(userLive().map(function (x) { return { name: x.name, urls: [x.url] }; }));
     var map = {}, got = 0, failed = 0;
     var jobs = feeds.map(function (f) {
-      return fetchText(f.urls[0], { referer: '', ua: '' }).then(function (txt) {
+      return fetchText(f.urls[0], { referer: '', ua: f.ua || '' }).then(function (txt) {
         if (!txt || txt.length < 20) throw new Error('empty');
         var list = txt.indexOf('#EXTM3U') >= 0 ? parseM3u(txt) : parseTxt(txt);
         list.forEach(function (c) { mergeChannels(map, c); });
@@ -747,6 +758,24 @@
     rescueResolve: function (name, epIndex, epName) { call('onRescueResolved', false, '网页版不支持按片名救场解析'); },
     openExternal: function (u) { try { root.open(u, '_blank'); } catch (e) {} }
   };
+
+  /* 把"上游出口"告诉 Service Worker: 直播源和很多片源没有 CORS 头,
+     由 SW 直接 fetch 只能拿到不透明响应(读不到字节 = 黑屏), 交给 Worker 去取就正常了。
+     页面这里送过去的配置能带上运行时改过的值(localStorage), SW 拿不到时会自己读 /webconfig.js 兜底。 */
+  function pushSwCfg() {
+    try {
+      var sw = root.navigator && root.navigator.serviceWorker;
+      if (!sw || !sw.controller) return;
+      sw.controller.postMessage({ type: 'proxycfg', proxy: ZYPROXY, token: PROXY_TOKEN });
+    } catch (e) {}
+  }
+  try {
+    pushSwCfg();
+    if (root.navigator && root.navigator.serviceWorker) {
+      root.navigator.serviceWorker.addEventListener('controllerchange', function () { setTimeout(pushSwCfg, 300); });
+    }
+    root.setInterval(pushSwCfg, 5000);      // SW 会被浏览器回收, 配置隔一会儿补一次
+  } catch (e) {}
 
   root.VOD = VOD; root.PK = PK;
   root.ZY_onAdStats = function (s) { adDropped = s.dropped || adDropped; adNote = s.note || adNote; };
