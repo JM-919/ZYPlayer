@@ -116,6 +116,11 @@ export default {
     let t;
     try { t = new URL(target); } catch (e) { return bad('bad q/u: 目标地址不是合法 URL'); }
     if (t.protocol !== 'http:' && t.protocol !== 'https:') return bad('bad scheme');
+    // 目标就是本 Worker 自己 = 代理套代理, 会无限递归。Cloudflare 对这种情况回 522,
+    // 用户只看到"加载失败"根本查不出原因 —— 这里明确拒绝, 并且把原因写清楚。
+    if (t.hostname === url.hostname) {
+      return bad('refuse self-proxy: 目标就是代理自己(说明上层又包了一层)。请把"已经是 /f? 或 /p? 的地址"原样使用, 不要再交给代理。', 400);
+    }
     if (BLOCK_HOSTS.indexOf(t.hostname) >= 0) return bad('blocked host', 403);
     if (ALLOW_HOSTS.length && !ALLOW_HOSTS.some(h => t.hostname === h || t.hostname.endsWith('.' + h))) {
       return bad('host not allowed: 代理的 ALLOW_HOSTS 白名单挡下了 ' + t.hostname +
@@ -132,11 +137,20 @@ export default {
     headers['User-Agent'] = ua || 'Mozilla/5.0 (Linux; Android 13; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36';
     const range = req.headers.get('Range'); if (range) headers['Range'] = range;
 
+    // 上游超时保护: 直播源里有些地址"连得上但不回数据", 不设超时的话这次请求会一直挂着,
+    // Cloudflare 边缘等不到 Worker 返回就丢一个 522 给浏览器(实测截图里就是这个:
+    // HTTP 522 networkError/manifestLoadError)。12 秒还没回就当这条线路不通, 明确回 504,
+    // 让播放器立刻去试下一条, 而不是干等 30 秒。
     let up;
     try {
-      up = await fetch(t.toString(), { headers, redirect: 'follow' });
+      const ctl = new AbortController();
+      const timer = setTimeout(() => { try { ctl.abort(); } catch (e) {} }, 12000);
+      try {
+        up = await fetch(t.toString(), { headers, redirect: 'follow', signal: ctl.signal });
+      } finally { clearTimeout(timer); }
     } catch (e) {
-      return new Response('upstream failed: ' + e.message, { status: 502, headers: CORS });
+      const why = (e && (e.name === 'AbortError' || /abort/i.test(e.message || ''))) ? '上游 12 秒没响应(超时)' : ('上游取回失败: ' + e.message);
+      return new Response(why, { status: 504, headers: CORS });
     }
     const ct = up.headers.get('Content-Type') || '';
     // 清单: 就地改写成继续走本 Worker(页面那边的 Service Worker 过期也不影响播放)
