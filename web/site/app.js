@@ -1184,6 +1184,9 @@ function playEp(i){
   // 表现就是"看到一半退出去, 再进来又从 0 开始"。现在只有**换集**才归零, 同集沿用记录里的进度。
   var _rec0 = histOf(curItem.name);
   var _sameEp = (_rec0 && _rec0.epIdx === i);
+  // 同一集重进 = 接着上次看(>5 秒才定位, 免得刚点开就被拖走)。
+  // 以前这里只把进度"写回记录"、并没有真的 seek, 于是"看到一半退出去再进来又从 0 开始"。
+  if (_sameEp && (_rec0.pos || 0) > 5) { pendingSeek = _rec0.pos; pendSeekEp = i; }
   histPut({ epIdx: i, epName: ep.name, pos: _sameEp ? (_rec0.pos || 0) : 0,
             dur: _sameEp ? (_rec0.dur || 0) : 0 });
   document.getElementById('player').className = 'on';
@@ -1486,6 +1489,7 @@ function vipSniffEp(i){
   try { PK.vipSniff(i, page, ck); } catch(e){ PK.toast('桥不可用: ' + e); }
 }
 function closePlayer(){
+  try { histTick(); } catch(e){}          // 退出前把最后进度落一次(5 秒一记的缝里退出会丢几秒)
   cancelAutoNext(true);
   sniffWant = null; platWant = null;      // 收工: 残留的溪探归属会让"直链页嗅到的流"抢播播放器
   rescueWant = ''; rescueName = '';       // 救场解析的归属也要清: 否则关掉播放器后迟到的回调还会把它弹回来
@@ -3710,6 +3714,9 @@ function applyWebMode(){
   if (window.__webModeApplied) return;      // 幂等: 迟到的补做不能重复挂监听
   window.__webModeApplied = 1;
   WEB = true;
+  // 给 <html> 打上 web 标记: 新增的响应式样式全部写成 `html.web …`, 这样无论窗口多宽,
+  // Android App(同一份 index.html)都不会匹配到 —— 网页端怎么改都不越界。
+  try { document.documentElement.className = (document.documentElement.className + ' web').trim(); } catch(e){}
   function drop(el){ try { if (el && el.parentNode) el.parentNode.removeChild(el); } catch(e){} }
   // 帮助函数: 抽屉/页面**只隐藏不删节点** —— show()/closeSheets() 会把它们列进去循环设置样式,
   // 节点没了就是 null 访问异常, 整个导航会跟着坏(这是"越界改坏"的典型, 特意记一笔)
