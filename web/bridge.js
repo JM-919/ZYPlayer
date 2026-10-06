@@ -420,6 +420,22 @@
 
   /* ------------------------------------------------------------------ 本地代理(交给 Service Worker) */
   var SWTOKEN = Math.random().toString(16).slice(2, 10);
+  /**
+   * 直播专用出口: 直接给 Worker 地址(不经过页面的 Service Worker)。
+   * 为什么单开一个: 直播一旦卡在"旧 SW 直接跨域取流"上就是黑屏, 而且用户在浏览器里
+   * 不一定刷新过 SW。Worker 侧现在会把清单里的每条地址改写成继续走它自己(见 proxy/worker.js),
+   * 所以直播彻底不依赖 SW 也能播; App 侧没有这个桥方法, 会照旧走 LocalProxy。
+   */
+  function proxyLive(url, referer, cookie) {
+    if (!url || !ZYPROXY) return '';
+    var s0 = String(url);
+    if (s0.indexOf(ZYPROXY + '/f?') === 0 || s0.indexOf(ZYPROXY + '/p?') === 0) return url;
+    var looksPl = /\.m3u8(\?|$)/i.test(s0) || !/\.[a-z0-9]{2,4}(\?|$)/i.test(s0);
+    return ZYPROXY + (looksPl ? '/f' : '/p') + '?t=' + encodeURIComponent(PROXY_TOKEN) + '&q=' + b64u(url)
+      + (referer ? '&r=' + encodeURIComponent(referer) : '')
+      + (cookie ? '&c=' + encodeURIComponent(cookie) : '');
+  }
+
   function proxyWrap(url, referer, cookie) {
     if (!url) return url;
     var s0 = String(url);
@@ -688,6 +704,7 @@
     adFilter: function (on) { adFilterOn = !!on; },
     adStats: function () { return JSON.stringify({ on: adFilterOn, dropped: adDropped, note: adNote }); },
     proxyWrap: function (u, r, c) { return proxyWrap(u, r, c); },
+    proxyLive: function (u, r, c) { return proxyLive(u, r, c); },
     douban: function (namesJson, limit) {
       var names = [];
       try { names = JSON.parse(namesJson) || []; } catch (e) {}
@@ -849,6 +866,24 @@
       if (!root.document.hidden) checkBuild();
     });
   } catch (e) {}
+
+  /* 详情页"封面做背景虚化": 皮肤里有 html.web body::after 用 --z-poster 做一层模糊背景。
+     封面地址只有 DOM 里才知道, 所以这里盯一下 #v-detail, 一出现封面就写进 CSS 变量(纯网页端装饰)。 */
+  function watchPoster() {
+    try {
+      var doc = root.document;
+      var v = doc && doc.getElementById('v-detail');
+      if (!v || !root.MutationObserver) return;
+      var upd = function () {
+        var img = v.querySelector('img');
+        var src = img && (img.getAttribute('src') || '');
+        if (src && src.indexOf('data:') !== 0) doc.body.style.setProperty('--z-poster', 'url("' + src + '")');
+      };
+      new root.MutationObserver(upd).observe(v, { childList: true, subtree: true });
+      upd();
+    } catch (e) {}
+  }
+  try { setTimeout(watchPoster, 800); } catch (e) {}
 
   root.VOD = VOD; root.PK = PK;
   root.ZY_onAdStats = function (s) { adDropped = s.dropped || adDropped; adNote = s.note || adNote; };
