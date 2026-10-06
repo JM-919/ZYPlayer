@@ -91,10 +91,16 @@ function abs(base, rel) {
   try { return new URL(rel, base).toString(); } catch (e) { return rel; }
 }
 function selfUrl(u, r, c) {
-  // 清单里可能已经是"Worker 改写过的绝对地址"(/f? 或 /p?) —— 那层代理已经很好了, 别再套一层
+  // 清单里可能已经是"Worker 改写过的绝对地址"(/f? 或 /p?) —— 那层代理已经很好了, 别再套一层。
+  // 同源那一份必须**无条件**认出来(不依赖 PROXY 配置是否读到), 否则会包成"代理的代理"→
+  // Worker 去 fetch 自己 → 522。
+  var _self = '';
+  try { _self = self.location.origin + self.location.pathname.replace(/[^/]*$/, ''); } catch (e) {}
+  var _u = String(u);
+  if (_self && (_u.indexOf(_self + 'f?') === 0 || _u.indexOf(_self + 'p?') === 0)) return u;
   var _pb = proxyBase();
-  if (_pb && (String(u).indexOf(_pb + '/f?') === 0 || String(u).indexOf(_pb + '/p?') === 0)) return u;
-  if (PROXY && (String(u).indexOf(PROXY + '/f?') === 0 || String(u).indexOf(PROXY + '/p?') === 0)) return u;
+  if (_pb && (_u.indexOf(_pb + '/f?') === 0 || _u.indexOf(_pb + '/p?') === 0)) return u;
+  if (PROXY && (_u.indexOf(PROXY + '/f?') === 0 || _u.indexOf(PROXY + '/p?') === 0)) return u;
   const qs = 'p?t=' + SWTOKEN + '&q=' + b64u(u)
     + (r ? '&r=' + encodeURIComponent(r) : '') + (c ? '&c=' + encodeURIComponent(c) : '');
   return new URL(qs, self.location.origin + self.location.pathname.replace(/[^/]*$/, '')).toString();
@@ -146,15 +152,24 @@ async function handle(request, url) {
 
   let upstream = null;
   async function tryFetch(target, hdrs) {
-    return await fetch(target, { headers: hdrs || {}, redirect: 'follow', mode: 'cors' });
+    const ctl = new AbortController();
+    const timer = setTimeout(() => { try { ctl.abort(); } catch (e) {} }, 12000);
+    try {
+      return await fetch(target, { headers: hdrs || {}, redirect: 'follow', mode: 'cors', signal: ctl.signal });
+    } finally { clearTimeout(timer); }
   }
   try {
     if (useF) upstream = await tryFetch(proxyUrl(u, '/f', r, c), {});
     else if (useP) upstream = await tryFetch(proxyUrl(u, '/p', r, c), range ? { Range: range } : {});
   } catch (e) { upstream = null; }
   if (!upstream || !upstream.ok) {
-    try { upstream = await fetch(u, { headers, redirect: 'follow' }); } catch (e) {
-      return new Response('upstream failed: ' + e.message, { status: 502 });
+    try {
+      const ctl2 = new AbortController();
+      const t2 = setTimeout(() => { try { ctl2.abort(); } catch (e) {} }, 12000);
+      try { upstream = await fetch(u, { headers, redirect: 'follow', signal: ctl2.signal }); }
+      finally { clearTimeout(t2); }
+    } catch (e) {
+      return new Response('upstream failed: ' + e.message, { status: 504 });
     }
   }
 
