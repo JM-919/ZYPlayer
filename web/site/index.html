@@ -178,6 +178,65 @@
     html.web .sec{margin:10px 2px 6px;}
     html.web #ptop,html.web #pbot{padding-left:12px;padding-right:12px;}
   }
+  /* ================= 网页版视觉升级(梦幻一点) =================
+     所有选择器都带 `html.web` 前缀 —— 那个 class 只有网页版产物才有(构建时写进 <html>),
+     所以下面无论写什么, Android App 都不会匹配到(不越界)。
+     只用老内核也认的属性(transform/transition/animation/box-shadow/渐变), 不用 mask、
+     不用 prefers-reduced-motion 之类会被 csscheck 判超基线的东西。 */
+  html.web{--glow:0 0 24px rgba(140,120,255,.35);}
+  html.web body{letter-spacing:.2px;}
+  /* 背景: 让原本的光斑缓慢"呼吸", 画面不死板 */
+  html.web body::before{animation:zyAurora 24s ease-in-out infinite alternate;}
+  @keyframes zyAurora{
+    0%{transform:scale(1) translateY(0);opacity:.95;}
+    100%{transform:scale(1.12) translateY(-1.5%);opacity:1;}
+  }
+  /* 顶栏: 玻璃 + 底部一道渐变亮线 */
+  html.web header{position:relative;padding-top:11px;padding-bottom:11px;}
+  html.web header::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:1px;
+    background:linear-gradient(90deg,transparent,rgba(140,120,255,.55),rgba(0,200,255,.45),transparent);}
+  html.web header .logo{box-shadow:0 0 0 1px rgba(255,255,255,.14), 0 6px 18px rgba(104,78,255,.35);}
+  html.web header h1{background:linear-gradient(92deg,#eef3fb 10%,#b9a6ff 55%,#7fd8ff 95%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;}
+  /* 卡片: 更圆、更"玻璃", 悬停浮起 + 一道斜向高光扫过 */
+  html.web .item{border-radius:15px;position:relative;
+    transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;}
+  html.web .item::after{content:'';position:absolute;top:0;left:-60%;width:45%;height:100%;pointer-events:none;
+    background:linear-gradient(100deg,transparent,rgba(255,255,255,.16),transparent);
+    transform:skewX(-18deg);opacity:0;transition:opacity .25s ease, left .55s ease;}
+  html.web .item:hover{border-color:rgba(160,140,255,.45);box-shadow:0 14px 34px rgba(0,0,0,.5), 0 0 0 1px rgba(150,130,255,.22), inset 0 1px 0 rgba(255,255,255,.16);}
+  html.web .item:hover::after{opacity:1;left:115%;}
+  html.web .item .nm{background:linear-gradient(180deg,rgba(0,0,0,0),rgba(0,0,0,.55));}
+  /* 按钮/输入: 胶囊 + 柔光 */
+  html.web .ghost,html.web .chips button,html.web .pbtn{border-radius:999px;}
+  html.web .ghost:hover,html.web .pbtn:hover{box-shadow:0 0 0 1px rgba(160,140,255,.4), 0 6px 18px rgba(104,78,255,.28);}
+  html.web .chips button.on{box-shadow:0 6px 18px rgba(34,197,94,.35), inset 0 1px 0 rgba(255,255,255,.3);}
+  html.web input,html.web select{border-radius:14px;transition:box-shadow .18s ease, border-color .18s ease;}
+  html.web input:focus,html.web select:focus{border-color:rgba(160,140,255,.55);box-shadow:0 0 0 4px rgba(120,100,255,.16);}
+  /* 分区标题: 前面一颗发光小点 */
+  html.web .sec{position:relative;padding-left:14px;}
+  html.web .sec::before{content:'';position:absolute;left:0;top:50%;width:7px;height:7px;margin-top:-3.5px;border-radius:50%;
+    background:linear-gradient(180deg,#b9a6ff,#6ad6ff);box-shadow:0 0 10px rgba(160,140,255,.8);}
+  /* 抽屉/设置面板: 更圆、更柔 */
+  html.web #plist,html.web #qlist,html.web #pskip,html.web #pset{border-radius:18px 18px 0 0;
+    box-shadow:0 -18px 50px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.14);}
+  /* 播放器: 控制栏渐变遮罩, 进度条发光 */
+  html.web #ptop{background:linear-gradient(180deg,rgba(0,0,0,.72),rgba(0,0,0,0));}
+  html.web #pbot{background:linear-gradient(0deg,rgba(0,0,0,.78),rgba(0,0,0,0));}
+  html.web #pfill{background:linear-gradient(90deg,#8f7bff,#5ad1ff);box-shadow:0 0 12px rgba(140,120,255,.85);}
+  html.web #pbuf{background:rgba(255,255,255,.22);}
+  html.web #pthumb{box-shadow:0 0 12px rgba(160,140,255,.9);}
+  html.web .pbtn{transition:background .15s ease, box-shadow .18s ease, transform .12s ease;}
+  html.web #pcenter .big{transition:transform .18s ease, opacity .18s ease;}
+  /* 桌面: 滚动条也收拾一下 */
+  @media (min-width: 820px){
+    html.web ::-webkit-scrollbar{width:10px;height:10px;}
+    html.web ::-webkit-scrollbar-thumb{background:linear-gradient(180deg,rgba(160,140,255,.55),rgba(90,209,255,.45));
+      border-radius:99px;border:2px solid transparent;}
+    html.web ::-webkit-scrollbar-track{background:transparent;}
+    html.web .item .nm{font-size:13px;}
+    html.web .empty{color:#9fabbf;}
+  }
   /* 播放器 */
   /* 坑(Android 7.x 点播放"没反应"的根因): 原来这里写的是 inset:0 —— 那是 Chrome 87+ 的简写,
      7.1 自带/未更新的 WebView(Chrome 51~86)直接丢掉这条声明, #player 只剩 position:fixed,
