@@ -428,6 +428,9 @@
     // ① 已经是"本代理地址"就别再套一层 —— 直播线路在 startLiveChannel 里先包过一次, 再包一层
     //    就变成"代理的代理", 播放器直接播不动。安卓端靠 127.0.0.1 判断躲过了这个问题, 网页端漏了。
     if (base && s0.indexOf(base + 'p?') === 0) return url;
+    // ①b 已经是"Worker 代理地址"同理: 再套一层会变成 Worker 去 fetch 它自己
+    //     (Cloudflare 会直接报错/递归), 直播就是这么整条链断掉的。
+    if (ZYPROXY && (s0.indexOf(ZYPROXY + '/f?') === 0 || s0.indexOf(ZYPROXY + '/p?') === 0)) return url;
     // ② Service Worker 还没接管(首次打开/刚更新)时不能返回裸地址: 浏览器直连上游普遍缺 CORS 头,
     //    直播就是"黑屏"。这时退回直接走 Cloudflare 代理, 至少能拿到字节。
     if (!root.navigator || !root.navigator.serviceWorker || !root.navigator.serviceWorker.controller) {
