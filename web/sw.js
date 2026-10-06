@@ -52,15 +52,18 @@ function normProxy(p) {
   if (p && !/^[a-z][a-z0-9+.-]*:\/\//i.test(p)) p = 'https://' + p;
   return p;
 }
+let cfgAt = 0;
 async function loadCfgFile() {
-  if (cfgTried || PROXY) return;
-  cfgTried = true;
+  if (PROXY) return;
+  if (cfgTried && Date.now() - cfgAt < 30000) return;   // 失败过就 30 秒后再试(以前失败一次就永远不试了)
+  cfgTried = true; cfgAt = Date.now();
   try {
     const txt = await (await fetch('/webconfig.js', { cache: 'no-store' })).text();
     const mp = /proxy:\s*saved\.proxy\s*\|\|\s*'([^']*)'/.exec(txt) || /proxy:\s*'([^']*)'/.exec(txt);
     const mt = /token:\s*saved\.token\s*\|\|\s*'([^']*)'/.exec(txt) || /token:\s*'([^']*)'/.exec(txt);
     if (mp) PROXY = normProxy(mp[1]);
     if (mt && mt[1]) PROXY_TOKEN = mt[1];
+    try { console.log('[ZY影视 SW] 上游出口 = ' + (PROXY || '(未配置, 直连)')); } catch (e2) {}
   } catch (e) {}
 }
 self.addEventListener('message', event => {
