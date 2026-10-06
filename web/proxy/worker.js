@@ -45,6 +45,13 @@ function bad(msg, code) { return new Response(msg, { status: code || 400, header
 // "疑似 SSRF"处理。但要诚实说明: 这一轮排查里那些 `403 Forbidden By WAF` **不是**它造成的,
 // 而是"请求没带 User-Agent"被上游挡掉后原样透传的(见下面 headers 处注释)。base64 少一层坑,
 // 真正必须带的是 User-Agent。
+// 编码目标地址用(和页面的 b64u 一致: UTF-8 → base64url, 去掉 = 填充)
+function b64u(s) {
+  const bytes = new TextEncoder().encode(String(s));
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
 function unb64u(s) {
   try {
     const bin = atob(String(s).replace(/-/g, '+').replace(/_/g, '/'));
@@ -52,6 +59,36 @@ function unb64u(s) {
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
     return new TextDecoder().decode(bytes);
   } catch (e) { return ''; }
+}
+
+/**
+ * 把 m3u8 里的地址改写成"继续走本 Worker"的绝对地址。
+ *
+ * 为什么要在 Worker 里也做一遍: 浏览器里的 Service Worker 是**可能过期/被回收**的
+ * (用户不刷新就一直跑旧版), 那时直播就是黑屏。这里改写好之后, 播放器拿到的清单里
+ * 每条地址都指向本 Worker —— 不依赖页面里那个 SW, 直播/VOD 都能起来。
+ *   · 清单(.m3u8 / 没后缀) → /f(取文本)
+ *   · 分片(其它)          → /p(取字节, 透传 Range)
+ * r/c(Referer/Cookie) 一起带下去: 防盗链的源全靠它。
+ */
+function proxify(uri, base, origin, token, r, c) {
+  let abs;
+  try { abs = /^https?:/i.test(uri) ? uri : new URL(uri, base).toString(); } catch (e) { return uri; }
+  const looksPl = /\.m3u8(\?|$)/i.test(abs) || !/\.[a-z0-9]{2,4}(\?|$)/i.test(abs);
+  return origin + (looksPl ? '/f' : '/p') + '?t=' + encodeURIComponent(token) + '&q=' + b64u(abs)
+    + (r ? '&r=' + encodeURIComponent(r) : '') + (c ? '&c=' + encodeURIComponent(c) : '');
+}
+function rewritePlaylist(text, base, origin, token, r, c) {
+  const out = String(text).split(/\r?\n/).map(line => {
+    const t = line.trim();
+    if (!t) return line;
+    if (t.charAt(0) === '#') {
+      const m = /URI="([^"]+)"/.exec(t);
+      return m ? line.replace(m[1], proxify(m[1], base, origin, token, r, c)) : line;
+    }
+    return proxify(t, base, origin, token, r, c);
+  });
+  return out.join('\n');
 }
 
 export default {
@@ -100,6 +137,19 @@ export default {
       up = await fetch(t.toString(), { headers, redirect: 'follow' });
     } catch (e) {
       return new Response('upstream failed: ' + e.message, { status: 502, headers: CORS });
+    }
+    const ct = up.headers.get('Content-Type') || '';
+    // 清单: 就地改写成继续走本 Worker(页面那边的 Service Worker 过期也不影响播放)
+    if (url.pathname === '/f' && (up.status === 200) && (/mpegurl/i.test(ct) || /\.m3u8(\?|$)/i.test(t.pathname) || !/\.[a-z0-9]{2,4}(\?|$)/i.test(t.pathname))) {
+      const text = await up.text();
+      if (text.indexOf('#EXTM3U') >= 0) {
+        const body = rewritePlaylist(text, t.toString(), new URL(req.url).origin, TOKEN, r, c);
+        return new Response(body, {
+          status: 200,
+          headers: Object.assign({}, CORS, { 'Content-Type': 'application/vnd.apple.mpegurl' })
+        });
+      }
+      return new Response(text, { status: up.status, headers: Object.assign({}, CORS, { 'Content-Type': ct || 'text/plain' }) });
     }
     const out = new Headers(CORS);
     ['Content-Type', 'Content-Length', 'Content-Range', 'Accept-Ranges', 'Cache-Control', 'Last-Modified']
