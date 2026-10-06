@@ -1,5 +1,8 @@
 # ZY影视 · Web Edition
 
+> **本文档只讲「网页版」**（`web/`）。安卓 App 的文档在**工程根目录**（`README.md` / `介绍.md` / `CHANGELOG*.md`）与
+> `pikachu-dl/README.md`。两套文档**分开保存、互不混写**：网页版仓库（GitHub）里只有网页版文档。
+
 > **Live: <https://zyplayer.hof12.ccwu.cc/>** — open it in any phone/desktop browser, no install.
 >
 > This is the web edition of ZY影视: aggregated movie/TV search, multi-source playback and
@@ -10,6 +13,12 @@ The web edition only replaces the native layer with JavaScript — a bridge (`br
 a Service Worker acting as the local proxy + ad filter (`sw.js` + `adfilter.js`),
 and a tiny CORS proxy (`proxy/worker.js`).
 
+## Scope: **video-on-demand only, no live TV**
+
+The web edition has **dropped live TV entirely** (entry button, page, channel tables, settings and code all removed):
+browsers cannot play most domestic IPTV streams (mixed content, port allow-lists, geo-blocking), and keeping it only
+made the player look broken. Use the Android app for live TV.
+
 ## What works
 
 | Capability | Web | Notes |
@@ -18,7 +27,6 @@ and a tiny CORS proxy (`proxy/worker.js`).
 | Detail page / source switching | ✅ | only switches to “same title + same episode”, identical rule to the app |
 | Playback (hls.js) + **ad filtering** | ✅ | m3u8 is cleaned by the Service Worker: CUE/SCTE-35 ad blocks, injected subtitle groups, ad segments, cross-directory insert blocks, short mid-roll blocks |
 | Sources needing Referer / UA | ✅ | the proxy fills them in server-side |
-| Live TV tables | ✅ | fetch + parse + grouping; probing is simplified |
 | Decrypting TVBox configs (incl. AES) | ✅ | WebCrypto AES-128-CBC, same extraction logic |
 | Douban ratings | ✅ | also through the proxy |
 | Watch progress / continue watching | ✅ | stored in localStorage |
