@@ -1238,6 +1238,7 @@ function playEp(i){
     });
     hls.on(Hls.Events.ERROR, function(e, d){
       if (myHls !== hls) return;                    // 这条线路早被换掉了
+      try { notePlayErr(d, playUrl); } catch(err){}   // 记下真实原因(网页端会把它在"都播不动"时显示出来)
       if (d && d.fatal) {
         autoSwitchSource('HLS:' + (d.details || ''));
         setBig('err');
@@ -1248,6 +1249,12 @@ function playEp(i){
   } else {
     lastSrcUrl = playUrl;                     // 记下当前真正在拉的地址, 给下面的 error 归属判定用
     v.src = playUrl; applyRate(); safePlay(v);
+    try {
+      v.onerror = function () {
+        var e2 = v.error || {};
+        notePlayErr({ type: 'media', details: 'mediaError code=' + (e2.code || 0), url: playUrl }, playUrl);
+      };
+    } catch (e) {}
   }
   var all = document.getElementById('epsBox');
   if (all) for (var k = 0; k < all.children.length; k++) all.children[k].className = '';
@@ -2733,7 +2740,8 @@ function liveNextLine(reason){
   if (next >= curItem.eps.length) {
     setBig('err');
     hideLoad();
-    showGest('这个频道 ' + curItem.eps.length + ' 条线路都放不动 —— 可能不是源的问题, 而是本机 WebView 解不了它的编码(H.265/AC-3 这类): 在「选集」里点「用其它播放器打开」交给 VLC/MX/EXO 试试');
+    showGest('这个频道 ' + curItem.eps.length + ' 条线路都放不动' + (WEB ? playErrHint() : '')
+      + ' —— 可能不是源的问题, 而是本机解不了它的编码(H.265/AC-3 这类): 在「选集」里点「用其它播放器打开」交给 VLC/MX/EXO 试试');
     return;
   }
   liveReport('fail');                      // 这条试过了不通 -> 记下来(连续两次就不再自动试它)
@@ -2774,6 +2782,23 @@ function nextPlayableSrc(cur, list, failed, tried){
   }
   return -1;
 }
+/* 最近一次播放失败的真实原因(hls.js 的错误), 网页端在"都播不动"时把它显示出来 ——
+   否则用户只能看到"播不动", 我也只能靠猜。字段: HTTP 码 / 错误类型 / 详情 / 地址尾巴。 */
+var lastPlayErr = '';
+function notePlayErr(d, url) {
+  try {
+    var code = (d && d.response && (d.response.code || d.response.status)) || 0;
+    var det = (d && d.details) || '';
+    var typ = (d && d.type) || '';
+    var tail = String(url || (d && (d.url || (d.frag && d.frag.url))) || '').slice(-60);
+    lastPlayErr = (code ? ('HTTP ' + code + ' ') : '') + typ + '/' + det + (tail ? (' @…' + tail) : '');
+  } catch (e) {}
+}
+function playErrHint() {
+  if (!lastPlayErr) return '';
+  return '（' + lastPlayErr + '）';
+}
+
 function autoSwitchSource(reason, force){
   // 出过画面就不再自动换源 —— 但"卡住不动"是例外(force): 画面冻在那儿不动, 用户想看下一源
   if (playedOk && !force) { clearFailWatch(); return; }
@@ -3263,7 +3288,12 @@ function startLiveChannel(name, urls, probe, okN, id){
     // 关键: 走本地代理。页面源是 file://, 直连 CDN 会因缺 CORS 头被浏览器挡掉, 表现就是"直播播不了";
     // LocalProxy 用 Java 去取, 回来带 Access-Control-Allow-Origin: *, 并把 m3u8 里的分片也改走代理。
     var play = u;
-    try { var pw = PK.proxyWrap(u, ref, ''); if (pw) play = pw; } catch(e){}
+    // 直播优先走"专用出口"(网页端 = 直接给 Worker, 不经过 Service Worker: 直播最怕旧 SW 卡住);
+    // App 侧没有 PK.proxyLive, 自动退回 proxyWrap(LocalProxy), 行为完全不变
+    try {
+      var pw = (PK.proxyLive ? PK.proxyLive(u, ref, '') : '') || PK.proxyWrap(u, ref, '');
+      if (pw) play = pw;
+    } catch(e){}
     // 探到是 HLS 的, 把 mime 一起带上: 很多直播地址没有 .m3u8 后缀(比如 /live/1234?streamid=x),
     // 只按后缀判就会把 HLS 丢给 <video> 直连, 结果还是黑屏
     var pmime = (r && r.k === 'm3u8') ? 'application/vnd.apple.mpegurl' : '';
