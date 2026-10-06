@@ -42,7 +42,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: 组装网页版(把 Android 工程里的界面搬到 web/dist)
+      - name: 播放链路自测(桥/Service Worker 的代理不变量)
+        run: node web/selftest.mjs
+      - name: 组装网页版(把界面源码搬到 web/dist)
         run: node web/build-web.mjs
       - name: 部署到 Cloudflare Worker(站点 + 代理)
         if: env.CF_API_TOKEN != '' && env.CF_ACCOUNT_ID != ''
