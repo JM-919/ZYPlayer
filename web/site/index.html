@@ -110,8 +110,6 @@
     background:var(--card);border:1px solid var(--hair);}
   .spq{display:block;width:100%;max-width:240px;margin:0 auto;border-radius:10px;background:#fff;padding:6px;}
   .spqcap{margin-top:8px;font-size:13px;color:var(--dim);}
-  .sponsorhowto{margin-top:14px;font-size:12px;line-height:1.6;}
-  .sponsorhowto code{background:rgba(255,255,255,.08);padding:1px 5px;border-radius:5px;font-size:11px;}
   /* ================= 网页端自适应(照静态博客的做法) =================
      参考用户自己的博客(felixdsh2.eu.cc): 文档自然滚动 + 容器限宽(~1080px) +
      流式网格 repeat(auto-fill, minmax(...)) + 断点 560 / 720 / 880 / 1180。
@@ -515,10 +513,12 @@
     <div id="navScroll">
       <!-- 顶栏「搜索」按钮已按用户要求删除(截图上标的就是它): 搜索页从**主页搜索框回车**或
            详情页的「搜索」按钮进。函数 openSearch() 保留(规范入口: 进搜索页并聚焦输入框)。 -->
-      <button class="ghost mini" onclick="openHistory()">历史记录</button>
-      <button class="ghost mini" onclick="openSponsor()">赞助福利</button>
+      <!-- 分端文案/位置见 app.js applyWebMode(): App 端是「历史 / 直播 / 解密 / 赞助 / 更新」,
+           网页端把直播·解密·更新删掉, 并把「历史记录」「赞助福利」并排放(维持原样)。 -->
+      <button class="ghost mini" id="navHist" onclick="openHistory()">历史</button>
       <button class="ghost mini" onclick="showLive()">直播</button>
       <button class="ghost mini" onclick="showDecrypt()">解密</button>
+      <button class="ghost mini" id="navSponsor" onclick="openSponsor()">赞助</button>
       <button class="ghost mini" onclick="showUpdate()">更新</button>
     </div>
   </header>
@@ -615,13 +615,6 @@
           <img class="spq" src="sponsor2.jpg" alt="打赏收款码 ②" onerror="sponsorQrNext(this)" />
           <div class="spqcap">微信 · 自愿打赏 ②</div>
         </div>
-      </div>
-      <div class="dim sponsorhowto">
-        收款码是站点所有者自己放的：两个槽位对应 <code>sponsor1.&lt;后缀&gt;</code> /
-        <code>sponsor2.&lt;后缀&gt;</code>（<b>png / jpg / jpeg / webp 都认</b>），放在界面同一目录
-        （安卓端 <code>pikachu-dl/android/assets/</code>，网页版 <code>web/site/</code>）即自动替换，
-        不用改代码；没放图时自动回落到同名 <code>.svg</code> 占位图。
-        换一条命令放入两张新图：<code>bash pikachu-dl/tools/put_sponsor_qr.sh 图1 图2 --build</code>。
       </div>
     </section>
 

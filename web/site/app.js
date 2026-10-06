@@ -4118,6 +4118,16 @@ function applyWebMode(){
     for (var i = 0; i < nav.length; i++) if (/更新|解密/.test(nav[i].textContent || '')) drop(nav[i]);
   } catch(e){}
   try { var vd = $('v-dec'); if (vd) vd.innerHTML = ''; } catch(e){}   // 解密页在网页端没意义(解出来的源多靠蜘蛛/嗅探)
+  // ①b 顶栏入口的**分端差异**(用户点名):
+  //     App   : 「历史」「赞助」, 赞助夹在 解密 与 更新 中间(HTML 里的顺序就是最终顺序)
+  //     网页端: 直播/解密/更新 上面已经删掉, 只剩两个按钮, 文案用完整词「历史记录」「赞助福利」,
+  //             并且并排放在一起 —— 维持用户认可的那个样子
+  try {
+    var bH = $('navHist'), bS = $('navSponsor');
+    if (bH) bH.textContent = '历史记录';
+    if (bS) bS.textContent = '赞助福利';
+    if (bH && bS && bH.parentNode && bH.parentNode === bS.parentNode) bH.parentNode.insertBefore(bS, bH.nextSibling);
+  } catch(e){}
   // 设置抽屉里"用其它播放器打开这条线路"(网页版没有第二播放器可调)
   try {
     var bs = document.querySelectorAll('#pset button');
