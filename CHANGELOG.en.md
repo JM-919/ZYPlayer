@@ -1,5 +1,16 @@
 # Changelog (web edition)
 
+### Fix · portrait layout was clipped (2026-10-07 late night)
+
+While copying the blog's responsive approach I changed two things I should not have; both reverted:
+
+* **Scroll model**: the blog is a normal web page (document scroll), but this UI is an app shell with
+  `#main` scrolling internally. Switching to document scroll made narrow screens clip overflowing content —
+  reverted to the app's original scroll model (only the *layout* part of the responsive work is kept).
+* **Percentage padding on the player control bars**: nice on wide screens, but it pushed the "选集" button
+  off-screen on phones — now only applies at ≥880px; phones keep the app's 12px.
+* Also removed a few leftover player style lines from the deleted skin (gradient bars, pill buttons, glow).
+
 ### Fix · Douban posters were blank (2026-10-07 late night)
 
 * The API returns `cover.url` (**no `pic` field**), so the card `src` was always empty;
