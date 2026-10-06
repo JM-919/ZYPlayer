@@ -1,3 +1,6 @@
+> 本文档只讲**网页版**（Cloudflare Worker 上的静态站 + Service Worker 代理）。安卓 App 的说明在
+> 工程根目录 `README.md` / `介绍.md` / `CHANGELOG*.md`，两边不许混写。
+
 # Changelog (web edition)
 
 ### Fix · Douban posters + clarify Douban's role (2026-10-07 late night)

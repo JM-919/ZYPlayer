@@ -14,7 +14,9 @@ window.ZYWEB = (function () {
   var saved = {};
   try { saved = JSON.parse(localStorage.getItem('zyweb_cfg') || '{}'); } catch (e) {}
   return {
-    proxy: saved.proxy || 'https://zyapi.hof12.ccwu.cc',        // ← 例如 'https://zy-proxy.abc.workers.dev'
+    // 留空 = 用页面自身(zyplayer 站内 /f|/p)。线上站点自己就是那个 Worker, **不需要**第二个域名。
+    // 只有把网页托管到别处(GitHub Pages 之类)时才需要填 'https://<你的 worker>.workers.dev'
+    proxy: saved.proxy || '',
     token: saved.token || 'a7ebc133-bf1b-4605-a914-cedeeb9b1e7f',   // ← 与 worker 里的 TOKEN 一致
     version: '3.1-web'
   };

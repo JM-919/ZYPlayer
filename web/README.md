@@ -22,7 +22,36 @@
 
 ## 〇之前 · 首页与默认开关
 
-* **首页 = 豆瓣榜单**（正在热映 / 热门电影 / 热门剧集 / 综艺 / 动漫），来源 `m.douban.com/rexxar/api/v2/subject_collection/...`：
+* **首页 = 豆瓣榜单**，豆瓣「看过」写的那一批 collection **全都真测过**，线上可用的 14 个按
+  「电影 / 剧集 / 综艺 / 动漫 / 纪录」分成四组填进首页那张分类下拉（选完记住，下次进来还是它）：
+
+  | 分组 | 榜单（括号内为 collection id） |
+  |---|---|
+  | 电影 | 正在上映 `movie_showing`、热门电影 `movie_hot`、豆瓣 Top250 `movie_top250`、一周口碑榜 `movie_weekly_best`(10 条)、经典老片 `movie_classic` |
+  | 剧集 | 热门剧集 `tv_hot`、国产剧 `tv_domestic`、欧美剧 `tv_american`、韩剧 `tv_korean`、日剧 `tv_japanese`、华语口碑剧集榜 `tv_chinese_best_weekly`(10 条) |
+  | 综艺 | 综艺 `tv_variety_show` |
+  | 动漫 | 动漫 `tv_animation` |
+  | 纪录 | 纪录片 `tv_documentary` |
+
+  **收起时是一排四个**（固定 4 列，屏再窄也不换行）：`正在上映 / 热门剧集 / 综艺 / 纪录片`；
+  「更多榜单 ▾」单独占一整行，点开才是上面那张完整分组表（动漫只在展开后出现）。
+  收起态**不显示分组标题**（就干净一排）。，
+  点一下 14 个全铺开（按钮变「收起榜单 ▴」，状态记在本地）。**折叠时当前选中的榜单永远可见** ——
+  否则收起后高亮跑到看不见的地方，用户会以为"点了没反应"。
+
+  这 14 个榜单**同时铺成「榜单面板」**（网页端首页搜索框下面，`#dbboards`）：
+  `display:grid` + `repeat(auto-fill,minmax(96px,1fr))`，分组标题 `grid-column:1/-1` 跨整行 ——
+  手机竖屏约 3 列、平板 6~7 列、桌面 10 列左右，屏多宽就铺多满（首页不再空一大片）；
+  最窄 560px 以下换成 `minmax(84px,1fr)` 与更小的字号。**面板与下拉二选一**：网页端用面板
+  （`html.web #typeSel{display:none}`），安卓端面板 `display:none`、照旧用分类下拉。
+  当前选中项加 `.on` 高亮（绿底），点一下即换榜单并重拉首页。
+
+  **实测为空、不许写进表里的 id**（省得以后又有人去试）：`movie_coming_soon`、`movie_new`、
+  `movie_domestic`、`movie_american`、`tv_anime`、`tv_cartoon`、`anime`、`movie_documentary`、
+  `tv_talk_show`、`tv_show_hot`。榜单表在 `web/bridge.js` 的 `CHARTS`，`web/selftest.mjs` 的 **[1c]** 把
+  「表里必须有这 14 个、不许有那些空 id、选项要真的进到请求里」钉住。
+
+* 榜单来源 `m.douban.com/rexxar/api/v2/subject_collection/...`：
   好处是**首页不依赖任何采集源**（源全挂首页也还在），「刷新」就是重新拉一次榜单；榜单条目只有片名/海报/评分，
   **点进去会自动按片名去聚合搜索**、拿到同名结果再进详情。
 * **默认开关**（都可在播放器「设置」里改）：静默提示 **开**、画面上显示(OSD) **关**、避开烧录广告源 **关**、广告过滤 **开**。

@@ -14,7 +14,10 @@
 'use strict';
 importScripts('adfilter.js');
 
-const SWTOKEN = 'zyweb';          // 与 bridge.js 里的 SWTOKEN 无关: 这个只防随手枚举
+// ★ 这里**必须**用配置里的令牌(webconfig.js 的 token)。以前写死 'zyweb',
+//   而线上 Worker 的 TOKEN 是 webconfig 里那串 —— SW 改写出来的 /p|/f 全部
+//   被 Worker 判 403(bad token), 表现就是"清单改写了但一个分片都播不了/海报全挂"。
+function swToken() { return PROXY_TOKEN || 'zyweb'; }
 const CACHE_MAX = 40;             // 自建清单缓存(把"没有分区地址的清单"拼成完整清单时用)
 
 function b64u(s) {
@@ -79,6 +82,10 @@ function proxyBase() {
   try { if (PROXY && (new URL(PROXY)).host === self.location.host) return self.location.origin; } catch (e) {}
   return PROXY;
 }
+function baseUrl(base, u, path, r, c) {
+  return base + path + '?t=' + encodeURIComponent(PROXY_TOKEN) + '&q=' + b64u(u)
+    + (r ? '&r=' + encodeURIComponent(r) : '') + (c ? '&c=' + encodeURIComponent(c) : '');
+}
 function proxyUrl(u, path, r, c) {
   return proxyBase() + path + '?t=' + encodeURIComponent(PROXY_TOKEN) + '&q=' + b64u(u)
     + (r ? '&r=' + encodeURIComponent(r) : '') + (c ? '&c=' + encodeURIComponent(c) : '');
@@ -101,7 +108,7 @@ function selfUrl(u, r, c) {
   var _pb = proxyBase();
   if (_pb && (_u.indexOf(_pb + '/f?') === 0 || _u.indexOf(_pb + '/p?') === 0)) return u;
   if (PROXY && (_u.indexOf(PROXY + '/f?') === 0 || _u.indexOf(PROXY + '/p?') === 0)) return u;
-  const qs = 'p?t=' + SWTOKEN + '&q=' + b64u(u)
+  const qs = 'p?t=' + encodeURIComponent(swToken()) + '&q=' + b64u(u)
     + (r ? '&r=' + encodeURIComponent(r) : '') + (c ? '&c=' + encodeURIComponent(c) : '');
   return new URL(qs, self.location.origin + self.location.pathname.replace(/[^/]*$/, '')).toString();
 }
@@ -128,6 +135,10 @@ self.addEventListener('install', e => self.skipWaiting());
 self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
 
 self.addEventListener('fetch', event => {
+  // ★ 图片一律**不拦**: 页面给 <img> 的地址已经是我们自己的代理端点(/p?t=<令牌>&q=<图片>&r=<Referer>),
+  //   拦截只会把它"解开"成直连豆瓣图床 —— 浏览器直连不带 Referer, 豆瓣回 418, 于是海报整批空(mark 0/20)。
+  //   同源 /p 交给站点自己的 Worker 一趟取回就行(Referer 由 Worker 代填, 已有实测 200)。
+  if (event.request && event.request.destination === 'image') return;
   const url = new URL(event.request.url);
   if (url.pathname.endsWith('/p') || url.pathname.endsWith('p')) {
     if (!url.searchParams.get('q') && !url.searchParams.get('u')) return;
@@ -182,12 +193,21 @@ async function handle(request, url) {
     const keep = upstream;                       // 直连虽然不 ok, 但它的状态码/正文对排查有用
     // 兜底出口: 优先用配置里的代理; **配置还没读到也没关系** —— 线上本站自己就是 Worker,
     // 同源 /f|/p 一样能取(豆瓣图床那种"不带 Referer 就 418"的资源就是靠这一跳救回来的)。
-    const fbBase = proxyBase() || (self.location.origin + self.location.pathname.replace(/[^/]*$/, ''));
-    if (fbBase) {
+    // 兜底顺序: **先同源**(线上站点自己就是 Worker, 不跨域) -> 再配置里的代理。
+    // 以前直接用配置里的 zyapi 域名, 一旦那边解析/被挡, 图片和媒体就整批失败(海报 0/20)。
+    const selfDir = self.location.origin + self.location.pathname.replace(/[^/]*$/, '');
+    const cfgBase = proxyBase();
+    const bases = [];
+    if (selfDir) bases.push(selfDir);
+    if (cfgBase && cfgBase !== selfDir) bases.push(cfgBase.replace(/\/+$/, ''));
+    for (let bi = 0; bi < bases.length; bi++) {
       try {
-        upstream = await tryFetch(proxyUrl(u, looksPlaylist ? '/f' : '/p', r, c), range ? { Range: range } : {});
-      } catch (e) { upstream = keep; }
-    } else { upstream = keep; }
+        const cand = await tryFetch(baseUrl(bases[bi], u, looksPlaylist ? '/f' : '/p', r, c), range ? { Range: range } : {});
+        if (cand && cand.ok) { upstream = cand; break; }
+        if (cand) upstream = cand;               // 全都不 ok 时留最后一个, 状态码给用户/排查用
+      } catch (e) { /* 试下一个出口 */ }
+    }
+    if (!upstream) upstream = keep;
   }
   if (!upstream) return new Response('上游取不到(直连与代理都失败)', { status: 504 });
 

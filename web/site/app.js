@@ -48,7 +48,13 @@ function zyPicOk(el){
   try { ZYDIAG.picOk++; ZYDIAG.lastPic = el && el.getAttribute('src') || ''; zyDiagDraw(); } catch(e) {}
 }
 function imgFallback(el){
-  try { ZYDIAG.picFail++; ZYDIAG.lastPic = el && el.getAttribute('src') || ''; zyDiagDraw(); } catch(e) {}
+  // 同一张图只记一次: 以前 <img> 失败后换占位符也会再触发一次, 20 部片子会显示"失败 40"。
+  try {
+    if (el && !el.getAttribute('data-failed')) {
+      try { el.setAttribute('data-failed', '1'); } catch (e0) {}
+      ZYDIAG.picFail++; ZYDIAG.lastPic = el.getAttribute('src') || ''; zyDiagDraw();
+    }
+  } catch(e) {}
   try {
     var name = el.getAttribute('data-n') || '影';
     var ch = name.replace(/[\[\]（）()·]/g, '').slice(0, 1) || '影';
@@ -103,6 +109,15 @@ function pickSite(k){
   curSite = k;
   var sel = $("typeSel");
   if (sel) { sel.innerHTML = ''; }                 // 先把旧源的分类表清掉, 免得拿旧 typeId 去问新源
+  // ★ 网页版首页是豆瓣榜单, 分类下拉就直接给「各大榜单」(电影/剧集/综艺/动漫/纪录)。
+  //   不再问采集源的分类表: 那一套 typeId 对豆瓣接口没意义(以前选了分类却还是同一批数据)。
+  if (isWeb()) {
+    pendingPick = false;
+    clearTimeout(pickTimer);
+    fillWebCharts();
+    reloadHome();
+    return;
+  }
   pendingPick = true;                              // 切源标志: 分类表回来后再拉首页
   clearTimeout(pickTimer);
   pickTimer = setTimeout(function(){               // 兜底: 分类表迟迟不来(源有问题/断网)也要把首页拉起来
@@ -126,6 +141,10 @@ var homeTimeout = null, homeDoneSeq = 0, forceSeq = 0;
 function reloadHome(force){
   if (!curSite) { try { PK.toast('数据源还没就绪, 等一下再刷'); } catch(e){} return; }
   curType = $("typeSel").value; page = 1;
+  if (isWeb()) {
+    try { localStorage.setItem('zy_web_chart', curType || 'movie_showing'); } catch(e) {}   // 下次进来还是这个榜单
+    paintWebChart();
+  }
   var ck = "pk_home_" + curSite + "_" + curType;
   var cached = null;
   if (!force) { try { cached = JSON.parse(localStorage.getItem(ck) || "null"); } catch(e){} }
@@ -2639,6 +2658,125 @@ function refreshDbRow(){
   } catch(e){}
 }
 
+/* ---------- 网页版分类下拉: 豆瓣各大榜单 ----------
+ * 榜单表在 bridge.js 的 CHARTS 里(每一条都在线上真测过非空, 空榜单不许写进去 —— 用户最烦"点了没内容")。
+ * 这里只做一件事: 按「电影/剧集/综艺/动漫/纪录」分组填进 #typeSel; 切换由已有的 onchange=reloadHome() 接管,
+ * 翻页(加载更多)也照旧走豆瓣的 start/count。
+ */
+function fillWebCharts(){
+  var sel = document.getElementById('typeSel');
+  if (!sel) return;
+  var list = [];
+  try { list = JSON.parse(VOD.doubanCharts()); } catch(e) { list = []; }
+  if (!list || !list.length) return;
+  var groups = [], map = {}, i, c;
+  for (i = 0; i < list.length; i++) {
+    c = list[i];
+    if (!c || !c.id) continue;
+    if (!map[c.group]) { map[c.group] = []; groups.push(c.group); }
+    map[c.group].push(c);
+  }
+  var h = '';
+  for (var g = 0; g < groups.length; g++) {
+    h += '<optgroup label="' + esc(groups[g]) + '">';
+    for (var j = 0; j < map[groups[g]].length; j++) {
+      c = map[groups[g]][j];
+      h += '<option value="' + esc(c.id) + '">' + esc(c.name) + '</option>';
+    }
+    h += '</optgroup>';
+  }
+  if (!h) return;
+  sel.innerHTML = h;
+  sel.disabled = false;
+  var want = '';
+  try { want = localStorage.getItem('zy_web_chart') || ''; } catch(e2) {}
+  var hit = false;
+  for (i = 0; i < list.length; i++) if (list[i].id === want) hit = true;
+  try { sel.value = hit ? want : list[0].id; } catch(e3) {}
+
+  // 真正给用户点的是**面板**(下拉在网页端被 CSS 藏起来, 但值还得靠它传)
+  var board = document.getElementById('dbboards');
+  if (board) {
+    var bh = '';
+    for (var g2 = 0; g2 < groups.length; g2++) {
+      var arr = map[groups[g2]];
+      bh += '<div class="bgroup" data-g="' + esc(groups[g2]) + '">' + esc(groups[g2]) + '</div>';
+      for (var m = 0; m < arr.length; m++) {
+        bh += '<button type="button" class="bchip" data-id="' + esc(arr[m].id) + '"'
+            + ' data-g="' + esc(groups[g2]) + '"'
+            + ' data-main="' + (isWebChartMain(arr[m].id) ? '1' : '0') + '"'
+            + ' onclick="pickWebChart(this)">' + esc(arr[m].name) + '</button>';
+      }
+    }
+    bh += '<button type="button" class="bmore" onclick="toggleWebCharts()" id="bmoreBtn"></button>';
+    board.innerHTML = bh;
+    paintWebChart();
+  }
+}
+
+/* 收起时保留的「常用榜单」—— 首页一屏就能看完, 不用滚 */
+// 收起时露出的四个(用户点名): 电影只留"正在上映"、剧集只留"热门剧集", 综艺与纪录片同行一排。
+// 动漫(tv_animation)**不在**这一排里 —— 它只在「更多榜单」展开后出现。
+var WEB_MAIN_CHARTS = ['movie_showing', 'tv_hot', 'tv_variety_show', 'tv_documentary'];
+function isWebChartMain(id){ return WEB_MAIN_CHARTS.indexOf(String(id)) >= 0; }
+var _webChartsOpen = null;                 // 内存里的**真实状态**, localStorage 只是"记一笔"
+function webChartsOpen(){
+  if (_webChartsOpen !== null) return _webChartsOpen;
+  try { _webChartsOpen = localStorage.getItem('zy_web_chart_more') === '1'; } catch(e) { _webChartsOpen = false; }
+  return _webChartsOpen;
+}
+
+/* 「更多榜单 ▾ / 收起 ▴」: 14 个全铺开, 或只留常用的 4 个 + 这一行按钮。
+   状态以内存为准 —— 浏览器隐身模式/禁 localStorage 时 setItem 会抛异常, 以前那样
+   "每次去读 localStorage" 就会导致按钮点了没反应(永远读到 false)。 */
+function toggleWebCharts(){
+  _webChartsOpen = !webChartsOpen();
+  try { localStorage.setItem('zy_web_chart_more', _webChartsOpen ? '1' : '0'); } catch(e) {}
+  paintWebChart();
+}
+
+/* 面板里点了某个榜单: 写回下拉(逻辑仍走 reloadHome 那一套) + 记住 + 高亮 */
+function pickWebChart(el){
+  var id = (el && el.getAttribute('data-id')) || '';
+  if (!id) return;
+  var sel = document.getElementById('typeSel');
+  if (sel) { try { sel.value = id; } catch(e) {} }
+  try { localStorage.setItem('zy_web_chart', id); } catch(e2) {}
+  paintWebChart();
+  reloadHome();
+}
+
+/* 高亮当前榜单(面板重绘/切榜单后都要刷一次) */
+function paintWebChart(){
+  var board = document.getElementById('dbboards');
+  if (!board || !board.querySelectorAll) return;
+  var cur = '';
+  try { cur = (document.getElementById('typeSel') || {}).value || ''; } catch(e) {}
+  var open = webChartsOpen();
+  board.className = open ? '' : 'collapsed';
+  // ① 每个榜单: 高亮 + 是否属于"收起时要藏起来的那批"
+  //    ★ 当前选中的**永远不藏**(data-main 不为 1 也显示), 否则收起后高亮不见了像"点了没反应"
+  var bs = board.querySelectorAll('.bchip');
+  var shownPerGroup = {};
+  for (var i = 0; i < bs.length; i++) {
+    var id = bs[i].getAttribute('data-id') || '';
+    var on = id === cur;
+    var extra = (bs[i].getAttribute('data-main') !== '1') && !on;
+    bs[i].className = 'bchip' + (extra ? ' extra' : '') + (on ? ' on' : '');
+    var g = bs[i].getAttribute('data-g') || '';
+    if (!extra) shownPerGroup[g] = 1;
+  }
+  // ② 分组标题: 组里一个都不显示时, 标题也别留着
+  var hs = board.querySelectorAll('.bgroup');
+  for (var j = 0; j < hs.length; j++) {
+    var g2 = hs[j].getAttribute('data-g') || '';
+    hs[j].className = 'bgroup' + (shownPerGroup[g2] ? '' : ' extra');
+  }
+  // ③ 按钮文案跟着状态走
+  var btn = document.getElementById('bmoreBtn');
+  if (btn) btn.textContent = open ? '收起榜单 ▴' : '更多榜单 ▾';
+}
+
 /* ---------- 分类表: 用源自己的 class, 之前写死的 1/2/3/4 拿不到内容 ---------- */
 function onVodClasses(list){
   var sel = document.getElementById('typeSel');
@@ -3771,24 +3909,31 @@ function webV(){ return $('video'); }
  * 结果立刻被"默认值+存档"盖回去 —— 用户看到的就是"说了默认关, 打开还是开"。
  */
 function applyWebPsDefaults(){
-  var MARK = 'zy_web_defs_v2';
-  var seen = false;
+  var MARK = 'zy_web_defs_v4';          // 每改一次默认值就升一版: 用户现存的旧默认会被纠正一次
+  var SEEN_SILENT = 'zy_web_silent_set'; // ★ 只有用户**自己点过**静默开关, 才认为他选了"关"
+  var seen = false, userSet = false;
   try { seen = !!localStorage.getItem(MARK); } catch(e) {}
-  if (!seen) {
-    PS.silent = 1;        // 静默提示: 开
-    PS.osd = 0;           // 画面上显示(OSD): 关
-    PS.adAvoid = 0;       // 避开烧录广告源: 关
+  try { userSet = !!localStorage.getItem(SEEN_SILENT); } catch(e) {}
+  if (!seen || !userSet) {
+    // 静默提示默认开。为什么还要看 userSet: 老存档里 silent:0 是"当时还没有这个开关"的默认值,
+    // 不是用户的选择 —— 只认"他亲手点过"(webToggleSilent 里写的标记)。
+    if (!userSet) PS.silent = 1;
+    if (!seen) { PS.osd = 0; PS.adAvoid = 0; }   // 画面上显示(OSD)=关, 避开烧录广告源=关
     try { psSave(); } catch(e) {}
     try { localStorage.setItem(MARK, '1'); } catch(e) {}
-  } else {
-    if (PS.silent === undefined) PS.silent = 1;
   }
+  // ★★ 这里必须重画一次开关文案。真正的原因: 那个「静默提示 开/关」按钮是 applyWebMode()
+  //    画的(bootStep 第 1 步), 而本函数在 initPlayerSettings() 里(bootStep 第 3 步)才跑 ——
+  //    画的时候 PS.silent 还是初值 0, 于是按钮显示"关", 之后值被改成 1 却没人重画。
+  //    用户看到的就是"明明是开启的, 却显示关"。
+  syncSilentUI();
 }
 
 /** 网页端: 静默提示开关(默认开 = 只留"有用/出错"的提示) */
 function syncSilentUI(){ var b = $('psSilent'); if (b) b.textContent = PS.silent ? '开' : '关'; }
 function webToggleSilent(){
   PS.silent = PS.silent ? 0 : 1;
+  try { localStorage.setItem('zy_web_silent_set', '1'); } catch(e) {}   // 记下"这是用户自己的选择"
   try { psSave(); } catch(e){}
   syncSilentUI();
   try { PK.toast(PS.silent ? '已开启静默提示' : '已关闭静默提示'); } catch(e){}

@@ -42,26 +42,46 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+      - name: 环境信息(排查失败时先看这里)
+        run: |
+          node -v
+          echo "提交: $GITHUB_SHA"
+          echo "CF 变量: token=$([ -n "$CF_API_TOKEN" ] && echo 有 || echo 无) account=$([ -n "$CF_ACCOUNT_ID" ] && echo 有 || echo 无) zone=$([ -n "$CF_ZONE_ID" ] && echo 有 || echo 无) worker=${CF_WORKER_NAME:-cool-sea-dfd8} domain=${CF_DOMAIN:-未设置}"
       - name: 播放链路自测(桥/Service Worker 的代理不变量)
         run: node web/selftest.mjs
       - name: 组装网页版(把界面源码搬到 web/dist)
         run: node web/build-web.mjs
+      # 这一步失败**默认不让整个构建变红**: 它最常见的失败原因是仓库里的 CF_API_TOKEN 过期/
+      # 权限不够(Workers Scripts:Edit), 而构建产物本身是好的 —— 构建变红会让人以为"代码坏了"。
+      # 想让它变成硬门(部署失败就失败)就去仓库变量里设 REQUIRE_CF_DEPLOY=true。
       - name: 部署到 Cloudflare Worker(站点 + 代理)
+        id: cfdeploy
+        continue-on-error: ${{ vars.REQUIRE_CF_DEPLOY != 'true' }}
         if: env.CF_API_TOKEN != '' && env.CF_ACCOUNT_ID != ''
-        run: node web/deploy-worker.mjs --domain "$CF_DOMAIN"
+        run: |
+          set -o pipefail
+          if [ -n "$CF_DOMAIN" ]; then
+            node web/deploy-worker.mjs --domain "$CF_DOMAIN" || { code=$?; echo "::warning::CF 部署失败(exit $code): 检查 CF_API_TOKEN 是否过期/有 Workers Scripts:Edit 权限, 以及 CF_ACCOUNT_ID/CF_ZONE_ID 是否正确"; exit $code; }
+          else
+            node web/deploy-worker.mjs || { code=$?; echo "::warning::CF 部署失败(exit $code): 同上; 另外没设 CF_DOMAIN 时不会绑定自定义域"; exit $code; }
+          fi
       - name: 打包 web/dist(手动部署可直接下载)
         uses: actions/upload-artifact@v4
         with:
           name: zyplayer-web
           path: web/dist
-      - name: 上传 GitHub Pages 工件
+      # 备用通道: 仓库没开 Pages 时这一步也可能报错, 同样不该把构建染红
+      - name: 上传 GitHub Pages 工件(备用通道)
+        continue-on-error: true
         uses: actions/upload-pages-artifact@v3
         with:
           path: web/dist
 
   deploy:
-    # 默认尝试发布; 设仓库变量 ENABLE_GH_PAGES=false 可关闭
-    if: vars.ENABLE_GH_PAGES != 'false'
+    # GitHub Pages 是**备用**通道(线上用的是 Cloudflare Worker)。
+    # 以前是"默认就试", 仓库没开 Pages 时这个 job 会红一下, 看着像构建坏了 —— 现在改成
+    # 要显式打开: 仓库变量 ENABLE_GH_PAGES=true 才跑(开了 Pages 再设它)。
+    if: vars.ENABLE_GH_PAGES == 'true'
     # 站点还没开时这里会失败, 但不该让整个构建变红(构建/artifact 才是主产物)
     continue-on-error: true
     needs: build

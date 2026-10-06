@@ -19,6 +19,17 @@ The web edition has **dropped live TV entirely** (entry button, page, channel ta
 browsers cannot play most domestic IPTV streams (mixed content, port allow-lists, geo-blocking), and keeping it only
 made the player look broken. Use the Android app for live TV.
 
+## Home page & defaults
+
+* **Home page = Douban collections** (now showing / hot movies / hot TV / variety / anime) via
+  `m.douban.com/rexxar/api/v2/subject_collection/...`: the home page no longer depends on any scraper source,
+  and "refresh" simply re-fetches the collection. Items carry only title/poster/rating — tapping one searches
+  all sources by title and opens the first same-title match.
+* **Web defaults** (all switchable in player Settings): silent hints **ON**, on-screen OSD **OFF**,
+  avoid burned-in-ad sources **OFF**, ad filtering **ON**.
+* **Blog-style responsive layout**: natural document scrolling, 1080px container, fluid
+  `repeat(auto-fill,minmax(...))` grids, breakpoints 560 / 720 / 880 / 1180.
+
 ## What works
 
 | Capability | Web | Notes |

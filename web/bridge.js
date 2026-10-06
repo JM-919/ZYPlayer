@@ -58,9 +58,18 @@
     for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
     return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   }
+  /**
+   * 取接口/清单该走哪个出口:
+   *   ① 配置里的代理(webconfig.proxy / 用户在设置里填的) —— 只有"站点自身当不了代理"时才需要;
+   *   ② 否则**站点自身**(线上 https://zyplayer.hof12.ccwu.cc 自己就是那个 Worker, 同源 /f 直接能用)。
+   * ★ 这里以前写的是 `ZYPROXY ? 走代理 : 直连` —— 一旦 proxy 没配(或被清空), 所有接口/豆瓣榜单
+   *   就变成浏览器直连, 跨域被挡 → 首页"暂无数据 一共 0 部"。所以出口不能用"配置有没有填"来决定。
+   */
+  function apiBase() { return (ZYPROXY || pageProxyBase()).replace(/\/+$/, ''); }
+
   function proxied(url, opts) {
     opts = opts || {};
-    var q = ZYPROXY + '/f?t=' + encodeURIComponent(PROXY_TOKEN) + '&q=' + b64u(url);
+    var q = apiBase() + '/f?t=' + encodeURIComponent(PROXY_TOKEN) + '&q=' + b64u(url);
     if (opts.referer) q += '&r=' + encodeURIComponent(opts.referer);
     if (opts.cookie) q += '&c=' + encodeURIComponent(opts.cookie);
     q += '&ua=' + encodeURIComponent(opts.ua || uaFor(url, opts.referer));
@@ -69,9 +78,10 @@
 
   function fetchText(url, opts) {
     opts = opts || {};
-    var target = ZYPROXY ? proxied(url, opts) : url;
+    var base = apiBase();
+    var target = base ? proxied(url, opts) : url;
     var init = { method: 'GET', credentials: 'omit', mode: 'cors' };
-    if (!ZYPROXY) {                                  // 直连: 能改的头只有这几个
+    if (!base) {                                     // 连出口都没有(纯静态托管且没配代理): 只能直连
       init.headers = { 'Accept': '*/*' };
       if (opts.referer) init.referrer = opts.referer;
     }
@@ -356,12 +366,31 @@
   }
 
   /** 页面侧该用哪个出口: 用户显式配置的代理 > 站点自身(线上站点就是 Worker) > webconfig 里的代理 */
-  function pageProxyBase() {
-    try { if (USER_PROXY) return String(USER_PROXY).replace(/\/+$/, ''); } catch (e) {}
-    try { if (sameHostProxy()) return location.origin + location.pathname.replace(/[^/]*$/, ''); } catch (e) {}
-    if (ZYPROXY) return String(ZYPROXY).replace(/\/+$/, '');
-    // 什么都没配时也用站点自身(线上站点就是 Worker): 总比返回空、让播放器去直连(必被 CORS 挡)强
-    try { return location.origin + location.pathname.replace(/[^/]*$/, ''); } catch (e) { return ''; }
+  // 站点自身出口(线上就是这个): 同源, 不跨域
+  function selfBase() { try { return location.origin + location.pathname.replace(/[^/]*$/, ''); } catch (e) { return ''; } }
+  var _baseOverride = '';        // 只有"站点自身不是代理"时(比如网页托管在别处)才会被探测改成别处
+  /**
+   * 页面侧该用哪个出口: **站点自身优先**。线上 https://zyplayer.hof12.ccwu.cc 这个站点**本身就是那个 Worker**,
+   * 同源 /f|/p 直接可用 —— 不需要、也不该再绕第二个域名。
+   * 历史坑(用户为此刻过我): 这里的第一顺位曾经是 webconfig 里的 proxy(=zyapi 那个**另一个域名**),
+   * 于是 20 张海报全变成跨域 <img> 请求, 浏览器一失败就是整批"海报 0/20"。
+   * 只有"站点自身当不了代理"(例如网页被托管到 GitHub Pages)时, 才由 probeProxyBase()
+   * 把 _baseOverride 设成配置里的代理 —— 那是唯一的跨域场景。
+   */
+  function pageProxyBase() { return _baseOverride || selfBase(); }
+  /**
+   * 一次探测: 站点自身能不能当代理用(线上能)。不能(例如网页托管在 GitHub Pages)才切到配置里的代理。
+   * 探测本身很小(取站点自己的 version.json), 结果只在内存里记一次。
+   */
+  function probeProxyBase() {
+    var sb = selfBase(), zb = (USER_PROXY || ZYPROXY) ? String(USER_PROXY || ZYPROXY).replace(/\/+$/, '') : '';
+    if (!sb || !zb || sb === zb) return;
+    var probe = sb + 'p?t=' + encodeURIComponent(PROXY_TOKEN) + '&q=' + b64u(sb + 'version.json');
+    try {
+      fetch(probe, { cache: 'no-store' }).then(function (r) {
+        if (!r || !r.ok) _baseOverride = zb;      // 站点自身不是代理 -> 用配置里的
+      }).catch(function () { _baseOverride = zb; });
+    } catch (e) {}
   }
 
   function sameOriginProxy(url, referer, cookie) {
@@ -423,6 +452,32 @@
                     fetchText: fetchText, analyze: analyze, doubanOne: doubanOne,
                     config: function () { return { proxy: ZYPROXY, token: PROXY_TOKEN, swToken: SWTOKEN }; } };
 
+  /**
+   * 豆瓣榜单总表 —— **每一项都在线上真发过请求验证非空**(2026-10-07 实测, 括号里是当时首条):
+   *   电影: 正在上映 / 热门 / Top250 / 一周口碑榜(10 条) / 经典老片
+   *   剧集: 热门 / 国产 / 欧美 / 韩 / 日 / 华语口碑剧集榜(10 条)
+   *   综艺: 综艺;  动漫: 动漫;  纪录: 纪录片
+   * 之前失败过的(写在这里免得以后又有人去试): movie_coming_soon / movie_new / movie_domestic /
+   *   movie_american / tv_anime / tv_cartoon / anime / movie_documentary / tv_talk_show / tv_show_hot。
+   */
+  var CHARTS = [
+    { id: 'movie_showing',          name: '正在上映',   group: '电影' },
+    { id: 'movie_hot',              name: '热门电影',   group: '电影' },
+    { id: 'movie_top250',           name: '豆瓣 Top250', group: '电影' },
+    { id: 'movie_weekly_best',      name: '一周口碑榜', group: '电影' },
+    { id: 'movie_classic',          name: '经典老片',   group: '电影' },
+    { id: 'tv_hot',                 name: '热门剧集',   group: '剧集' },
+    { id: 'tv_domestic',            name: '国产剧',     group: '剧集' },
+    { id: 'tv_american',            name: '欧美剧',     group: '剧集' },
+    { id: 'tv_korean',              name: '韩剧',       group: '剧集' },
+    { id: 'tv_japanese',            name: '日剧',       group: '剧集' },
+    { id: 'tv_chinese_best_weekly', name: '华语口碑剧集榜', group: '剧集' },
+    { id: 'tv_variety_show',        name: '综艺',       group: '综艺' },
+    { id: 'tv_animation',           name: '动漫',       group: '动漫' },
+    { id: 'tv_documentary',         name: '纪录片',     group: '纪录' }
+  ];
+  var LEGACY = { '': 'movie_showing', '1': 'movie_hot', '2': 'tv_hot', '3': 'tv_variety_show', '4': 'tv_animation' };
+
   var VOD = {
     sites: function () { return JSON.stringify(allSites()); },
     userSites: function () { return JSON.stringify(userSites()); },
@@ -444,9 +499,15 @@
      *   · 榜单项只有片名/海报/评分(没有源与 id), 点进去由 app.js 按片名去聚合搜索再进详情;
      *   · 翻页用豆瓣的 start/count(「加载更多」照旧可用)。
      */
+    /** 网页端可用榜单(每一个都在线上真测过: 非空才写进来), app.js 用它填「榜单」下拉 */
+    doubanCharts: function () { return JSON.stringify(CHARTS); },
     home: function (siteKey, typeId, page, seq) {
-      var COLL = { '': 'movie_showing', '1': 'movie_hot', '2': 'tv_hot', '3': 'tv_variety_show', '4': 'tv_anime' };
-      var cid = COLL[String(typeId == null ? '' : typeId)] || 'movie_hot';
+      var t = String(typeId == null ? '' : typeId);
+      // ① 新版: 下拉里给的就是榜单 id(movie_showing / tv_korean …), 直接当 collection 用
+      var cid = '';
+      for (var ci = 0; ci < CHARTS.length; ci++) if (CHARTS[ci].id === t) { cid = t; break; }
+      // ② 兼容老参数(安卓那套 '1'/'2'/'3'/'4' 与空值), 免得别处调用拿到空数据
+      if (!cid) cid = LEGACY[t] || 'movie_showing';
       var pg = Math.max(1, parseInt(page || 1, 10) || 1);
       var u = 'https://m.douban.com/rexxar/api/v2/subject_collection/' + cid
         + '/items?start=' + ((pg - 1) * 20) + '&count=20&for_mobile=1';
@@ -708,6 +769,8 @@
     rescueResolve: function (name, epIndex, epName) { call('onRescueResolved', false, '网页版不支持按片名救场解析'); },
     openExternal: function (u) { try { root.open(u, '_blank'); } catch (e) {} }
   };
+
+  try { probeProxyBase(); } catch (e) {}
 
   /* 把"上游出口"告诉 Service Worker: 直播源和很多片源没有 CORS 头,
      由 SW 直接 fetch 只能拿到不透明响应(读不到字节 = 黑屏), 交给 Worker 去取就正常了。

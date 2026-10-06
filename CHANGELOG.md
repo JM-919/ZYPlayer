@@ -1,3 +1,98 @@
+
+## 2026-10-07 收起态改成一排四个 + 修「静默提示」开关显示反了 + CI 加固
+
+**① 收起态布局(按用户要求)**: 固定 4 列 —— `正在上映 / 热门剧集 / 综艺 / 纪录片` 同排;
+「更多榜单 ▾」仍单独一行; 收起时不显示分组标题; 动漫只在展开后出现。
+CSS 用 `#dbboards.collapsed{grid-template-columns:repeat(4,minmax(0,1fr))}` —— 屏窄也**不换行**,
+只是每格变窄、字号降到 11px。真机截图确认。
+
+**② 「静默提示」明明是开却显示关 —— 找到了真原因**: 那个「开/关」按钮的文案是
+`applyWebMode()`(bootStep 第 1 步)画上去的, 而默认值是在 `initPlayerSettings()`(第 3 步)里
+`applyWebPsDefaults()` 才写进 `PS.silent` 的 —— **值改了却没人重画那个按钮**, 所以永远显示"关"。
+修法: `applyWebPsDefaults()` 结尾补一次 `syncSilentUI()`; 另加 `zy_web_silent_set` 标记 ——
+老存档里的 `silent:0` 是"当时还没这个开关"的默认值, 不算用户的选择, 只有他亲手点过才认。
+`web/selftest.mjs` 新增 **[1d]** 四条源码级不变量把这个坑钉住(CI 也会跑)。
+
+**③ CI 加固(`.github/workflows/pages.yml`)**: 构建 job 里"部署到 Cloudflare"这一步失败
+默认**不再把构建染红**(最常见原因是仓库里的 `CF_API_TOKEN` 过期/权限不足, 而构建产物是好的),
+并会打印 `::warning::` 指出检查哪几项; 环境信息步骤会把 node 版本与 CF 变量是否齐全打出来。
+GitHub Pages 那套改成**显式开启**(`ENABLE_GH_PAGES=true` 才跑) —— 它是备用通道,
+线上用的是 Cloudflare Worker, 不该因为没开 Pages 就让每次运行都是红的。
+
+**注意**: 本轮改动已部署到线上(Cloudflare Worker), 但**还没推到 GitHub** —— 手上的 GitHub 令牌
+只能读不能写(推送被拒: Invalid username or token)。仓库同步已备好(含删掉 `web/relay`),
+需要一个有 `Contents: write` 的 PAT 才能推。
+
+### 追加: 面板改成"默认折叠"
+
+用户选了方案 2。默认只显示**正在上映 / 热门电影 / 热门剧集 / 综艺** 4 个 + 一行「更多榜单 ▾」,
+点开 14 个全铺开(按钮变「收起榜单 ▴」)。折叠时**当前选中的那个永远可见**(`data-main` 不为 1 也显示),
+不然收起后高亮跑到看不见的地方。分组标题在该组一个都不显示时一起藏掉。
+
+展开状态**以内存为准**(`_webChartsOpen`), localStorage 只负责"记一笔" —— 隐身模式/禁 localStorage 时
+`setItem` 会抛异常, 原先"每次都去读 localStorage"的写法会退化成"点了没反应"。
+
+真机实测(无障碍通道截图): 折叠态 4 个榜单 + 「更多榜单 ▾」→ 点开 14 个全铺开 + 「收起榜单 ▴」,
+海报照常加载; 点榜单切换列表(一周口碑榜首条《罗斯》, 与 curl 探测一致)。
+
+## 2026-10-07 榜单面板(不再只是一个下拉)
+
+用户要"把榜单全拉出来铺成行列, 首页别显太空旷, 而且要各端都适配"。
+
+* 首页搜索框下面新增 `#dbboards` **榜单面板**: 14 个榜单按分组铺成网格。
+  布局全靠 `grid-template-columns:repeat(auto-fill,minmax(96px,1fr))` —— 列数由屏幕宽度自己算,
+  手机竖屏 ~3 列 / 平板 ~7 列 / 桌面 ~10 列, 分组标题 `grid-column:1/-1` 跨整行;
+  ≤560px 换 `minmax(84px,1fr)` 与小字号。没有一行 JS 参与算列数(不靠 `window.innerWidth` 猜)。
+* 面板与下拉**二选一**: 网页端面板显示、下拉被 `html.web #typeSel{display:none}` 藏掉
+  (值仍从下拉取, 逻辑没分叉); 安卓端 `#dbboards{display:none}`, 照旧用分类下拉 —— **App 侧零影响**。
+* 点面板里的榜单 = 写回下拉值 + 记住(`localStorage.zy_web_chart`) + `.on` 绿底高亮 + 重拉首页。
+* 新增两个 CSS 特性(`gap@grid_context` / `grid-column`, Chrome 57)已按规矩登记进
+  `abuild/csscheck-allow.txt`: 它们只出现在 `html.web` 规则里, 老内核的 App 永远匹配不到。
+> 本文档只讲**网页版**（Cloudflare Worker 上的静态站 + Service Worker 代理）。安卓 App 的说明在
+> 工程根目录 `README.md` / `介绍.md` / `CHANGELOG*.md`，两边不许混写。
+
+
+## 2026-10-07 首页分类榜单(网页版)
+
+用户问"豆瓣 API 能不能分类显示各大榜单"。**不猜, 把 25 个候选 collection 挨个上线真发请求**,
+非空才进表 —— 可用 14 个, 按「电影/剧集/综艺/动漫/纪录」分组填进首页的分类下拉:
+
+    电影: 正在上映 / 热门电影 / 豆瓣 Top250 / 一周口碑榜 / 经典老片
+    剧集: 热门剧集 / 国产剧 / 欧美剧 / 韩剧 / 日剧 / 华语口碑剧集榜
+    综艺: 综艺    动漫: 动漫    纪录: 纪录片
+
+* 选哪个记在 `localStorage.zy_web_chart`, 下次进来还是它; 翻页照旧走豆瓣的 start/count;
+* 实测为空的 id 也写进了文档与自测(不许再被加回表里): `movie_coming_soon` / `tv_anime` /
+  `tv_cartoon` / `anime` / `movie_documentary` / `movie_domestic` / `movie_american` / `tv_talk_show` …;
+* `web/selftest.mjs` 新增 **[1c]** 一组不变量(表内容 + 选项确实进了请求 + 老参数兼容)。
+* 安卓端**没动**: `VOD.doubanCharts()` 是网页版专用桥方法(已登记在 `abuild/uicheck-allow.txt`),
+  安卓首页仍走 Java 的 VodBridge。
+
+### 追加: 我上一版把首页改没了(首页 0 部), 已修 —— 原因只有一行
+
+上一版我把 `webconfig.js` 的 `proxy` 默认改成空字符串, 而 `fetchText()` 当时的写法是
+**`proxy 有值才走代理, 没值就直连`** —— 于是所有采集接口和豆瓣榜单都变成浏览器直连(跨域被挡),
+首页就成了"暂无数据 · 一共 0 部"。**这是我把默认值清空造成的, 不是豆瓣/源的锅。**
+
+修法: 出口不再由"配置有没有填"决定 —— `apiBase() = 配置里的代理 || 站点自身(zyplayer)`。
+配置为空时走站点自己的 `/f`, 配置填了才用别的域名(托管到 GitHub Pages 那种场景)。
+`web/selftest.mjs` 新增 **[1b]** 三条回归不变量把这条钉住(proxy 没填时接口必须走站点自身、不许直连)。
+
+## 2026-10-07 修海报 0/20 —— 两个真凶, 都在"多绕的那一层"上
+
+线上诊断显示 `home 20 部 | 海报 成功0/失败20`, 排查后是两个独立的错:
+
+1. **Service Worker 把图片请求拦下来解开了**。页面给 `<img>` 的地址本来就是我们自己的
+   `/p?t=<令牌>&q=<图片>&r=<豆瓣>`(站点自己的 Worker 取回, Referer 由服务端代填, 实测 200)。
+   SW 却又把它拦下、还原成"直连豆瓣图床" —— 浏览器直连不带 Referer, 豆瓣一律回 **418**。
+   现在 **图片请求(destination=image)SW 完全不碰**, 直接交给站点的 Worker。
+2. **SW 改写清单时用的令牌写死成了 `zyweb`**。线上 Worker 的 TOKEN 是 webconfig 里那串,
+   于是 SW 改写出来的 `/p|/f` 全被 Worker 判 **403 bad token**(实测对照: 正确令牌 200, `zyweb` 403)。
+   现在 SW 从 `webconfig.js` 读令牌。
+
+顺带按你的要求把**第二个域名彻底去掉**: `pageProxyBase()` 改成"**站点自身(zyplayer)优先**",
+`webconfig.js` 的 `proxy` 默认**留空**(同源); 只有把网页托管到 GitHub Pages 这类地方时,
+才会去用配置里的代理。
 # 更新记录（网页版）
 
 ### 修 · 豆瓣海报 & 明确豆瓣的定位(2026-10-07 深夜)

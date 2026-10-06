@@ -13,7 +13,7 @@
  *   ③ Service Worker 改写清单时, 已经是 Worker 地址的行必须原样保留;
  *   ④ 网页端直播列表只保留"有 https 线路"的频道。
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import vm from 'node:vm';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -33,7 +33,7 @@ function el() {
 }
 
 /* ---------------------------------------------------------------- 桥: 代理地址不变量 */
-function makeBridge(feeds) {
+function makeBridge(feeds, cfg) {
   const store = {};
   const win = {
     console, setTimeout, clearTimeout, setInterval: () => 0, clearInterval,
@@ -56,6 +56,8 @@ function makeBridge(feeds) {
     MutationObserver: function () { this.observe = () => {}; }
   };
   win.window = win; win.self = win; win.globalThis = win; win.PK_toast = () => {};
+  // 线上默认: webconfig 里 proxy 留空(代理就是站点自身), token 是那串随机值
+  win.ZYWEB = cfg || { proxy: '', token: 'a7', version: 'selftest' };
   vm.runInContext(readFileSync(join(here, 'bridge.js'), 'utf8'), vm.createContext(win), { filename: 'bridge.js' });
   return win;
 }
@@ -82,12 +84,79 @@ console.log('\n[1] 桥: 代理地址构建与不重复包裹的不变量');
   ok('已是同源 /p 地址: 再包不变', w.PK.proxyWrap('https://site.example/p?t=x&q=abc', '', '') === 'https://site.example/p?t=x&q=abc');
 }
 
+/* ------------------------------------ 桥: 没配 proxy 时接口也必须走"站点自身"(回归: 首页 0 部) */
+console.log('\n[1b] 桥: webconfig 里 proxy 没填时, 接口/豆瓣榜单仍然走站点自身(不是直连)');
+{
+  const w = makeBridge();
+  const seen = [];
+  w.fetch = (u) => { seen.push(String(u)); return Promise.resolve({ ok: true, status: 200,
+    text: () => Promise.resolve('{"subject_collection_items":[]}') }); };
+  w.onVodHome = () => {}; w.onVodSearch = () => {}; w.onVodDetail = () => {}; w.onVodClasses = () => {};
+  try { w.VOD.home('', '', 1, 1); } catch (e) {}
+  await new Promise(r => setTimeout(r, 30));
+  const u0 = seen[0] || '';
+  ok('接口走的是站点自身的 /f 出口', u0.indexOf('https://site.example/f?') === 0, u0.slice(0, 80));
+  ok('接口没有被"直连"(没绕过出口)', seen.length > 0 && u0.indexOf('m.douban.com/rexxar') < 0, u0.slice(0, 80));
+  ok('出口里带的是配置里的令牌(不是写死的 zyweb)', u0.indexOf('t=a7') > 0, u0.slice(0, 90));
+}
+
+/* ------------------------------- 界面源码: 静默提示开关(值被纠正后必须重画文案) */
+console.log('\n[1d] 界面: 「静默提示」开关的默认值与文案(用户报过: 明明是开, 却显示关)');
+{
+  const cands = ['../pikachu-dl/android/assets/app.js', 'site/app.js'];
+  let src = '';
+  for (const c of cands) { const f = join(here, c); if (existsSync(f)) { src = readFileSync(f, 'utf8'); break; } }
+  ok('找得到界面脚本 app.js', !!src);
+  const at = src.indexOf('function applyWebPsDefaults');
+  const body = at >= 0 ? src.slice(at, src.indexOf('\n}', at)) : '';
+  ok('默认值里把 silent 设成开', /PS\.silent\s*=\s*1/.test(body));
+  // 关键回归: 开关文案是 applyWebMode() 先画的, 而本函数在后面才跑 —— 不重画就永远显示"关"
+  ok('值设完之后重画开关文案(syncSilentUI)', /syncSilentUI\(\)/.test(body));
+  ok('只有用户自己点过才认"关"(zy_web_silent_set)', /zy_web_silent_set/.test(src));
+  const tg = src.indexOf('function webToggleSilent');
+  const tbody = tg >= 0 ? src.slice(tg, src.indexOf('\n}', tg)) : '';
+  ok('用户点开关时会留下"这是他的选择"的标记', /zy_web_silent_set/.test(tbody));
+}
+
+/* ------------------------------------------- 桥: 豆瓣榜单表(网页版首页分类)不变量 */
+console.log('\n[1c] 桥: 榜单表与首页取数(网页版「分类榜单」)');
+{
+  const w = makeBridge();
+  const charts = JSON.parse(w.VOD.doubanCharts());
+  const ids = charts.map(c => c.id);
+  ok('榜单表至少有 12 个', charts.length >= 12, '实际 ' + charts.length);
+  for (const need of ['movie_showing', 'movie_hot', 'movie_top250', 'movie_weekly_best', 'movie_classic',
+                      'tv_hot', 'tv_domestic', 'tv_american', 'tv_korean', 'tv_japanese',
+                      'tv_chinese_best_weekly', 'tv_variety_show', 'tv_animation', 'tv_documentary']) {
+    ok('榜单里有 ' + need, ids.indexOf(need) >= 0);
+  }
+  ok('每个榜单都有中文名和分组', charts.every(c => c.name && c.group));
+  ok('表里没有(线上实测为空的)伪榜单', ids.indexOf('movie_coming_soon') < 0 && ids.indexOf('tv_anime') < 0);
+  // 首页请求确实带着用户选的榜单
+  const seen = [];
+  w.fetch = (u) => { seen.push(String(u)); return Promise.resolve({ ok: true, status: 200,
+    text: () => Promise.resolve('{"subject_collection_items":[]}') }); };
+  w.onVodHome = () => {};
+  const dec = (u) => { const m = /[?&]q=([^&]+)/.exec(u); let b = (m ? m[1] : '').replace(/-/g, '+').replace(/_/g, '/');
+    if (b.length % 4) b += '='.repeat(4 - b.length % 4);
+    try { return Buffer.from(b, 'base64').toString('utf8'); } catch (e) { return ''; } };
+  try { w.VOD.home('', 'movie_top250', 1, 1); } catch (e) {}
+  await new Promise(r => setTimeout(r, 20));
+  ok('选 Top250 -> 请求 movie_top250 榜单', dec(seen[0] || '').indexOf('subject_collection/movie_top250') > 0, dec(seen[0] || ''));
+  try { w.VOD.home('', '3', 1, 2); } catch (e) {}
+  await new Promise(r => setTimeout(r, 20));
+  ok('老参数(3)仍映射到综艺榜单', dec(seen[1] || '').indexOf('subject_collection/tv_variety_show') > 0, dec(seen[1] || ''));
+  try { w.VOD.home('', '', 1, 3); } catch (e) {}
+  await new Promise(r => setTimeout(r, 20));
+  ok('空参数 -> 正在上映', dec(seen[2] || '').indexOf('subject_collection/movie_showing') > 0, dec(seen[2] || ''));
+}
+
 /* ---------------------------------------------------------------- SW: 清单改写不变量 */
 console.log('\n[2] Service Worker: 改写清单时不动"已经是代理地址"的行');
 {
   const sandbox = {
     console, setTimeout, clearTimeout, setInterval: () => 0, clearInterval,
-    importScripts() {}, addEventListener() {},
+    importScripts() {}, addEventListener(t, f) { if (t === 'fetch') sandbox.__fetch = f; },
     self: null, location: { origin: 'https://site.example', pathname: '/sw.js' },
     Response, Headers, Request, URL, AbortController, TextEncoder, TextDecoder,
     fetch: (u) => (String(u).indexOf('webconfig.js') >= 0
@@ -113,7 +182,21 @@ console.log('\n[2] Service Worker: 改写清单时不动"已经是代理地址"�
   const out = String(res.text);
   ok('同源 /p 行原样保留', out.indexOf('https://site.example/p?t=a7&q=AAA') >= 0);
   ok('已是代理的 /f 行原样保留', out.indexOf('https://site.example/f?t=a7&q=BBB') >= 0);
-  ok('相对分片被改写成走本 SW', out.indexOf('seg-2.ts') < 0 && out.indexOf('p?t=zyweb&q=') > 0);
+  ok('相对分片被改写成走本 SW', out.indexOf('seg-2.ts') < 0 && out.indexOf('p?t=a7&q=') > 0);
+  // ★ 令牌必须用 webconfig 里的那串, 不许写死 'zyweb' —— 写死时 Worker 判 403, 改写过的分片全取不到。
+  ok('改写用的是配置里的令牌(不是写死的 zyweb)', out.indexOf('p?t=zyweb&q=') < 0, out.slice(0, 120));
+  // ★ <img> 请求不许被 SW 拦: 拦了就会把同源 /p 解开成直连豆瓣图床, 不带 Referer 一律 418 → 海报全空。
+  {
+    let called = false;
+    const ev = { request: { url: 'https://site.example/p?t=a7&q=AAA&r=https%3A%2F%2Fm.douban.com%2F', destination: 'image' },
+                 respondWith() { called = true; } };
+    sandbox.__fetch(ev);
+    ok('图片请求(destination=image)不拦, 直接交给站点自己的 Worker', called === false);
+    let called2 = false;
+    const ev2 = { request: { url: 'https://site.example/p?t=a7&q=AAA', destination: '' }, respondWith() { called2 = true; } };
+    sandbox.__fetch(ev2);
+    ok('媒体请求(非 image)仍然被 SW 接管', called2 === true);
+  }
   ok('绝对分片被改写成走本 SW', out.indexOf('https://cdn.example/seg-3.ts') < 0);
   ok('URI="…" 也被改写成走本 SW', out.indexOf('URI="key.bin"') < 0);
 }
