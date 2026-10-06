@@ -1744,7 +1744,16 @@ function safePlay(v){
       } catch(e){}
     }
     var r = v.play();
-    if (r && typeof r.catch === 'function') r.catch(function(){ if (WEB) webNeedGesture(); });
+    if (r && typeof r.catch === 'function') r.catch(function(){
+      if (!WEB) return;
+      // 被自动播放策略挡下: 先静音起播(静音是允许的, 画面立刻就有), 再提示"点一下开声音"
+      try {
+        v.muted = true;
+        var r2 = v.play();
+        if (r2 && r2.catch) r2.catch(function(){ webNeedGesture(); });   // 连静音都不让放, 才用遮罩
+        webMuteHint();
+      } catch(e) { webNeedGesture(); }
+    });
   } catch(e) {}
 }
 function fmt(s){
@@ -3350,7 +3359,8 @@ function setUrl(u){
 }
 /* ---------- 解密器(与独立解密器 App 共用同一份 Box.analyze) ---------- */
 var decRaw = '', decJson = '';
-function showDecrypt(){ show('v-dec'); }
+function showDecrypt(){ if (isWeb()) return;   // 网页端: 解密出来的源大多靠蜘蛛/嗅探, 没意义
+  show('v-dec'); }
 function decClear(){ var t=document.getElementById('decIn'); if(t) t.value=''; document.getElementById('decOut').innerHTML=''; }
 function decPaste(){
   try { var c = VOD.clipText ? VOD.clipText() : ''; if (c) { document.getElementById('decIn').value = c; PK.toast('已粘贴'); } else PK.toast('剪贴板空的'); }
@@ -3648,6 +3658,23 @@ function seekBy(sec){
     showGest((sec > 0 ? '前进 ' : '后退 ') + Math.abs(sec) + ' 秒');
   } catch(e){}
 }
+/** 静音起播后的提示: 点一下屏幕(触摸或点击)就把声音打开, 只挂一次 */
+function webMuteHint(){
+  try { PK.toast('已静音起播，点一下屏幕开声音'); } catch(e){}
+  if (window.__muteHintArmed) return;
+  window.__muteHintArmed = 1;
+  var un = function(){
+    try { PK.unmute(); syncVolUI(); } catch(e){}
+    try {
+      document.removeEventListener('touchstart', un, true);
+      document.removeEventListener('click', un, true);
+      document.removeEventListener('mousedown', un, true);
+    } catch(e){}
+  };
+  document.addEventListener('touchstart', un, true);
+  document.addEventListener('click', un, true);
+  document.addEventListener('mousedown', un, true);
+}
 /**
  * 浏览器"自动播放策略"挡下了 play() —— 给一个明确的点按入口,
  * 而不是让画面一直黑着、用户以为"网页版坏了"。
@@ -3693,8 +3720,9 @@ function applyWebMode(){
   try { var vu = $('v-update'); if (vu) vu.innerHTML = ''; } catch(e){}   // 页面留着(show() 要按 id 取), 内容清空
   try {
     var nav = document.querySelectorAll('#navScroll button');
-    for (var i = 0; i < nav.length; i++) if (/更新/.test(nav[i].textContent || '')) drop(nav[i]);
+    for (var i = 0; i < nav.length; i++) if (/更新|解密/.test(nav[i].textContent || '')) drop(nav[i]);
   } catch(e){}
+  try { var vd = $('v-dec'); if (vd) vd.innerHTML = ''; } catch(e){}   // 解密页在网页端没意义(解出来的源多靠蜘蛛/嗅探)
   // 设置抽屉里"用其它播放器打开这条线路"(网页版没有第二播放器可调)
   try {
     var bs = document.querySelectorAll('#pset button');
@@ -3757,6 +3785,9 @@ function applyWebMode(){
   // ⑥ 桌面鼠标: 以前只有触摸事件会把控制栏叫出来, 电脑上"鼠标移上去什么都不出现"(用户反馈)
   try {
     var pl3 = $('player');
+    // 有没有真正的鼠标: 触摸设备上浏览器会把触摸合成为 mousemove/click, 不判断就会"手指一点控制栏乱弹"
+    var hasMouse = false;
+    try { hasMouse = !!(root.matchMedia && root.matchMedia('(hover: hover) and (pointer: fine)').matches); } catch(e){}
     function inCtrl(el){
       try {
         if (!el) return false;
@@ -3765,7 +3796,7 @@ function applyWebMode(){
       } catch(e){ return false; }
     }
     function controlsVisible(){ var t = $('ptop'); return !!t && ('' + t.className).indexOf('hide') < 0; }
-    if (pl3) {
+    if (pl3 && hasMouse) {
       var lastMv = 0;
       pl3.addEventListener('mousemove', function(){
         var now = Date.now();
@@ -3776,6 +3807,8 @@ function applyWebMode(){
       pl3.addEventListener('mouseleave', function(){ try { hideUI(); } catch(e){} });
       pl3.addEventListener('dblclick', function(ev){ if (inCtrl(ev.target)) return; toggleFullscreen(); });
       pl3.addEventListener('click', function(ev){
+        // 触摸设备合成的 click 交给原有的触摸逻辑, 这里只处理真鼠标
+        if (!hasMouse || (ev.sourceCapabilities && ev.sourceCapabilities.firesTouchEvents)) return;
         if (inCtrl(ev.target) || (anySheetOpen && anySheetOpen())) return;   // 抽屉开着时单击不切播放
         if (locked) { showUI(); return; }
         if (!controlsVisible()) { showUI(); return; }         // 第一下先把控制栏叫出来(和手机端一致)
