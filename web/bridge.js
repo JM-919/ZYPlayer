@@ -292,6 +292,22 @@
       return list;
     });
   }
+  /** 网页版: 把每条频道的线路按"浏览器可播性"重排(https 在前, 非标准端口的往后) */
+  function sortLinesForWeb(ch) {
+    try {
+      if (!ch || !ch.u || ch.u.length < 2) return ch;
+      var score = function (u) {
+        var s0 = String(u || '');
+        var https = /^https:/i.test(s0) ? 0 : 1;              // 混合内容: http 基本没戏
+        var port = (s0.match(/^https?:\/\/[^\/]+:(\d+)/) || [])[1];
+        var badPort = (port && ['80', '443', '8080', '8443'].indexOf(port) < 0) ? 1 : 0;
+        return https * 2 + badPort;
+      };
+      ch.u = ch.u.slice().sort(function (a, b) { return score(a) - score(b); });
+    } catch (e) {}
+    return ch;
+  }
+
   function liveList() {
     if (liveAll) return liveAll;
     try { liveAll = JSON.parse(localStorage.getItem('zy_live_cache') || '[]') || []; } catch (e) { liveAll = []; }
@@ -750,6 +766,11 @@
         groups: order.map(function (n) { return { name: n, n: g[n] }; }) });
     },
     liveChannels: function (group) {
+      // 网页版的现实: https 页面里**不能混用 http 流**(混合内容), 而 Cloudflare 出口
+      // 又有端口白名单(8181/9901 这类直接 1003)与地区限制。所以把 https 线路排前面,
+      // 让"能播的那几条"先被尝到, 而不是一上来就撞最不可能通的一条。
+      var all0 = liveList();
+      (all0 || []).forEach(sortLinesForWeb);
       var l = liveList();
       return JSON.stringify(l.filter(function (c) { return !group || c.g === group; }));
     },
@@ -914,6 +935,18 @@
 
   /* 详情页"封面做背景虚化": 皮肤里有 html.web body::after 用 --z-poster 做一层模糊背景。
      封面地址只有 DOM 里才知道, 所以这里盯一下 #v-detail, 一出现封面就写进 CSS 变量(纯网页端装饰)。 */
+  /** 直播页加一句"网页版能播什么"的说明 —— 免得用户以为播放器坏了 */
+  function liveHintOnce() {
+    try {
+      var d = root.document, el = d.getElementById('liveHint');
+      if (!el || el.getAttribute('data-zyweb')) return;
+      el.setAttribute('data-zyweb', '1');
+      el.innerHTML += '<br><b>网页版能播的直播很有限</b>：浏览器不允许 https 页面混用 http 流，'
+        + 'Cloudflare 出口还有端口白名单（8181/9901 这类端口取不到）与地区限制 —— '
+        + '国内 IPTV 大多落在这几条里，请在 App 里看；这里能播的是 https 且不锁地区的线路。';
+    } catch (e) {}
+  }
+
   function watchPoster() {
     try {
       var doc = root.document;
@@ -929,6 +962,9 @@
     } catch (e) {}
   }
   try { setTimeout(watchPoster, 800); } catch (e) {}
+  try {
+    setInterval(liveHintOnce, 1200);       // 直播页是动态渲染的, 轻量轮询一次就够了
+  } catch (e) {}
 
   root.VOD = VOD; root.PK = PK;
   root.ZY_onAdStats = function (s) { adDropped = s.dropped || adDropped; adNote = s.note || adNote; };
