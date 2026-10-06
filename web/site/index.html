@@ -101,6 +101,54 @@
   .eps button.cur{background:var(--grn);color:#07120a;}
   .tag{display:inline-block;font-size:11px;padding:1px 8px;border-radius:99px;background:var(--g1);color:var(--dim);
     margin-right:6px;border:1px solid var(--hair);}
+  /* ================= 桌面端自适应 =================
+     手机版是"整屏铺满的应用壳", 直接搬到电脑上就是又空又大(用户原话: 电脑端巨丑)。
+     这里补一套宽屏规则: 内容居中限宽 + 卡片按宽度自动排多列 + 鼠标悬停反馈 + 播放器控件限宽。
+     **只在足够宽的屏幕上生效**(手机上匹配不到), 而且只用 flex/百分比这类老内核也认的写法 ——
+     Android 7.x 的 WebView 解析到这几块也不会出错, App 的样子一个像素不变。 */
+  @media (min-width: 820px){
+    main{padding:18px 24px 56px;}
+    #main section{max-width:1120px;margin:0 auto;}
+    button,input,select,.item,.hlist .item{cursor:pointer;}
+    button{transition:filter .12s ease, transform .12s ease;}
+    button:hover{filter:brightness(1.18);}
+    button:active{transform:scale(.97);}
+    /* 卡片: 宽屏自己排 6 列(1400px 以上 8 列), 用 flex+百分比而不是 grid */
+    .grid{display:flex;flex-wrap:wrap;margin:-8px;}
+    .grid .item{width:calc(16.666% - 16px);margin:8px;}
+    .item{transition:transform .15s ease, box-shadow .15s ease;}
+    .item:hover{transform:translateY(-3px);box-shadow:0 12px 28px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.14);}
+    .item .nm{font-size:13px;padding:7px 8px 9px;}
+    .sec{font-size:15px;margin:20px 2px 10px;}
+    /* 选集更好点: 一行 8 个 */
+    .eps{display:flex;flex-wrap:wrap;margin:-8px;}
+    .eps button{width:calc(12.5% - 16px);margin:8px;font-size:13px;padding:11px 6px;}
+    /* 详情页: 封面大一点, 正文列宽舒服些 */
+    .dhead{grid-template-columns:150px 1fr;gap:18px;}
+    .dhead img{width:150px;height:225px;}
+    .dhead h2{font-size:22px;}
+    .meta{font-size:12.5px;}
+    .desc{max-height:240px;font-size:13.5px;line-height:1.8;}
+    .hlist .item{width:130px;flex:0 0 auto;}
+    .bar input,.bar select{max-width:520px;}
+    .kwprev{max-width:760px;}
+    /* 播放器: 控件栏限宽居中(4K 屏上按钮横跨整个屏幕根本没法点), 视频居中 */
+    #ptop,#pbot{padding-left:6%;padding-right:6%;}
+    #pgbar{max-width:1120px;margin:0 auto;}
+    #prow{max-width:1120px;margin:0 auto;}
+    #ptitle{font-size:15px;}
+    .pbtn:hover{background:var(--g2);}
+  }
+  @media (min-width: 1400px){
+    .grid .item{width:calc(12.5% - 16px);}
+    #main section{max-width:1320px;}
+  }
+  /* 有鼠标的设备: 控制栏按钮再大一点, 进度条细条也更好拖 */
+  @media (hover: hover) and (pointer: fine){
+    .pbtn{padding:7px 12px;}
+    #ptrack{height:6px;}
+    #ptrack:hover{height:9px;}
+  }
   /* 播放器 */
   /* 坑(Android 7.x 点播放"没反应"的根因): 原来这里写的是 inset:0 —— 那是 Chrome 87+ 的简写,
      7.1 自带/未更新的 WebView(Chrome 51~86)直接丢掉这条声明, #player 只剩 position:fixed,
