@@ -26,9 +26,10 @@ const dist = join(here, 'dist');
 
 const SPA_FILES = ['index.html', 'app.js', 'hls.min.js', 'legacy.css',
                   // 赞助页的两张收款码: 占位图是 svg; 站点所有者把真实收款码存成同名 .png 即自动替换
-                  'sponsor_alipay.svg', 'sponsor_wechat.svg'];
+                  'sponsor1.svg', 'sponsor2.svg'];
 // 用户自己放的真实收款码(可选, 有就一起带上; 前端 <img> 优先 png, 失败才回落到 svg 占位图)
-const SPA_OPTIONAL = ['sponsor_alipay.png', 'sponsor_wechat.png', 'sponsor_alipay.jpg', 'sponsor_wechat.jpg'];
+const SPA_OPTIONAL = ['sponsor1.jpg', 'sponsor2.jpg', 'sponsor1.png', 'sponsor2.png',
+                      'sponsor1.jpeg', 'sponsor2.jpeg', 'sponsor1.webp', 'sponsor2.webp'];
 const androidAssets = join(rootDir, 'pikachu-dl', 'android', 'assets');
 const siteDir = join(here, 'site');
 

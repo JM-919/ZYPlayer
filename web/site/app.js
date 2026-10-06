@@ -842,15 +842,15 @@ function openSponsor(){
   show('v-sponsor');
 }
 /**
- * 收款码取图: 依次试 png → jpg → jpeg → webp → svg(占位图)。
- * 站点所有者只要把图存成 sponsor_alipay.* / sponsor_wechat.* 丢进 assets 目录就行,
+ * 收款码取图: 依次试 jpg → png → jpeg → webp → svg(占位图)。
+ * 站点所有者只要把图存成 sponsor1.* / sponsor2.* 丢进 assets 目录就行,
  * 不用管后缀、也不用改代码 —— <img> 加载失败时本函数换下一个候选, 最后一定落到 svg 占位图。
  */
 function sponsorQrNext(img){
   try {
     var src = String((img && img.getAttribute('src')) || '');
-    var base = src.indexOf('wechat') >= 0 ? 'sponsor_wechat' : 'sponsor_alipay';
-    var list = ['png', 'jpg', 'jpeg', 'webp', 'svg'];
+    var base = src.indexOf('sponsor2') >= 0 ? 'sponsor2' : 'sponsor1';
+    var list = ['jpg', 'png', 'jpeg', 'webp', 'svg'];
     var n = parseInt(img.getAttribute('data-i') || '0', 10) + 1;
     img.setAttribute('data-i', String(n));
     if (n < list.length) img.src = base + '.' + list[n];

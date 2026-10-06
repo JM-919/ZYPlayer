@@ -604,21 +604,24 @@
         <b>不涉及任何付费购买</b>：不是充值、不是会员、不是订阅，也<b>不换取</b>任何内容、功能、去广告或服务承诺。
         本应用与网页版的全部功能始终免费开放，赞助与否、金额多少都不影响你能看什么、能用什么。请量力而行。
       </div>
+      <!-- 两个打赏码槽位: 图在 assets/sponsor1.* 与 assets/sponsor2.*(png/jpg/jpeg/webp 都认;
+           没有图时自动回落到同名的 .svg 占位图)。要换成别的渠道, 把这里的标签文字改一下即可。 -->
       <div class="sponsorwrap">
         <div class="sponsorcard">
-          <img class="spq" src="sponsor_alipay.png" alt="支付宝打赏码" onerror="sponsorQrNext(this)" />
-          <div class="spqcap">支付宝 · 自愿打赏</div>
+          <img class="spq" src="sponsor1.jpg" alt="打赏收款码 ①" onerror="sponsorQrNext(this)" />
+          <div class="spqcap">微信 · 自愿打赏 ①</div>
         </div>
         <div class="sponsorcard">
-          <img class="spq" src="sponsor_wechat.png" alt="微信打赏码" onerror="sponsorQrNext(this)" />
-          <div class="spqcap">微信 · 自愿打赏</div>
+          <img class="spq" src="sponsor2.jpg" alt="打赏收款码 ②" onerror="sponsorQrNext(this)" />
+          <div class="spqcap">微信 · 自愿打赏 ②</div>
         </div>
       </div>
       <div class="dim sponsorhowto">
-        收款码是站点所有者自己放的：把真实收款码存成 <code>sponsor_alipay.&lt;后缀&gt;</code> /
-        <code>sponsor_wechat.&lt;后缀&gt;</code>（<b>png / jpg / jpeg / webp 都认</b>），放进界面同一目录
+        收款码是站点所有者自己放的：两个槽位对应 <code>sponsor1.&lt;后缀&gt;</code> /
+        <code>sponsor2.&lt;后缀&gt;</code>（<b>png / jpg / jpeg / webp 都认</b>），放在界面同一目录
         （安卓端 <code>pikachu-dl/android/assets/</code>，网页版 <code>web/site/</code>）即自动替换，
-        不用改代码；一个都没放才显示上面这张占位图。
+        不用改代码；没放图时自动回落到同名 <code>.svg</code> 占位图。
+        换一条命令放入两张新图：<code>bash pikachu-dl/tools/put_sponsor_qr.sh 图1 图2 --build</code>。
       </div>
     </section>
 
