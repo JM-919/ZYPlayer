@@ -145,30 +145,41 @@ async function handle(request, url) {
   const range = request.headers.get('Range');
   if (range) headers['Range'] = range;
 
-  // 看起来像清单吗? 带 .m3u8 后缀 -> 是; 完全没有后缀(很多直播地址长这样) -> 也按清单试一次
+  // 看起来像清单吗? 带 .m3u8 后缀 -> 是; 完全没有后缀(很多直播/分片地址长这样) -> 也按清单试一次
   const looksPlaylist = /\.m3u8(\?|$)/i.test(u) || !/\.[a-z0-9]{2,4}(\?|$)/i.test(u);
-  const useF = !!PROXY && looksPlaylist;                 // /f = 取文本(清单)
-  const useP = !!PROXY && !looksPlaylist;                // /p = 取字节(分片, 透传 Range)
+
+  /** 原样透传(状态码 + 关键头 + 字节流都保住; Range/206 不能丢) */
+  function passthrough(up) {
+    const h = new Headers();
+    ['Content-Type', 'Content-Length', 'Content-Range', 'Accept-Ranges', 'Cache-Control', 'Last-Modified']
+      .forEach(k => { const v = up.headers.get(k); if (v) h.set(k, v); });
+    h.set('Access-Control-Allow-Origin', '*');
+    return new Response(up.body, { status: up.status, headers: h });
+  }
 
   // 取上游的顺序很重要(实测踩出来的):
   //   ① **先直连**: 用用户自己的网络。国内 CDN/直播源经常只认国内家宽 IP, 而我们的
   //      Cloudflare 出口会被 403(甚至端口不被允许) —— 之前"先走 Worker"就会整片播不了;
   //   ② 直连失败(跨域被拦/混合内容 http/https)再走 Worker: 由服务端代取, 并代填 Referer/UA。
   let upstream = null;
-  const proxiedPath = looksPlaylist ? '/f' : '/p';
   try { upstream = await tryFetch(u, headers); } catch (e) { upstream = null; }
   if (!upstream || !upstream.ok) {
+    const keep = upstream;                       // 直连虽然不 ok, 但它的状态码/正文对排查有用
     if (PROXY) {
       try {
-        upstream = await tryFetch(proxyUrl(u, proxiedPath, r, c), range ? { Range: range } : {});
-      } catch (e) { upstream = null; }
-    }
+        upstream = await tryFetch(proxyUrl(u, looksPlaylist ? '/f' : '/p', r, c), range ? { Range: range } : {});
+      } catch (e) { upstream = keep; }
+    } else { upstream = keep; }
   }
   if (!upstream) return new Response('上游取不到(直连与代理都失败)', { status: 504 });
 
   const ctype = upstream.headers.get('Content-Type') || '';
   if (isM3u8(u, ctype) || looksPlaylist) {
-    const text = await upstream.text();
+    // ★ 用 clone 偷看开头, 判完再决定走哪条路 ——
+    //   以前这里直接 await upstream.text(): 万一这地址根本不是清单(比如没有后缀的分片),
+    //   二进制会被 UTF-8 解坏再吐给播放器, 表现就是"分片拿到了但播不动"。
+    let text = '';
+    try { text = await upstream.clone().text(); } catch (e) { text = ''; }
     if (text.indexOf('#EXTM3U') >= 0) {
       const res = rewrite(text, u, r, c);
       return new Response(res.text, {
@@ -176,17 +187,9 @@ async function handle(request, url) {
         headers: { 'Content-Type': 'application/vnd.apple.mpegurl', 'Access-Control-Allow-Origin': '*' }
       });
     }
-    // 不是清单(有些直播是 flv/ts): 原样回给播放器, 别把字节丢掉
-    return new Response(text, { status: upstream.status, headers: { 'Content-Type': ctype || 'application/octet-stream', 'Access-Control-Allow-Origin': '*' } });
+    return passthrough(upstream);               // 不是清单: 原样给播放器
   }
-  // 普通文件: 透传字节(保留状态码与关键头)
-  const h = new Headers();
-  ['Content-Type', 'Content-Length', 'Content-Range', 'Accept-Ranges', 'Cache-Control'].forEach(k => {
-    const v = upstream.headers.get(k);
-    if (v) h.set(k, v);
-  });
-  h.set('Access-Control-Allow-Origin', '*');
-  return new Response(upstream.body, { status: upstream.status, headers: h });
+  return passthrough(upstream);
 }
 
 self.addEventListener('message', e => {
