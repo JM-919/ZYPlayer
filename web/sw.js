@@ -150,28 +150,21 @@ async function handle(request, url) {
   const useF = !!PROXY && looksPlaylist;                 // /f = 取文本(清单)
   const useP = !!PROXY && !looksPlaylist;                // /p = 取字节(分片, 透传 Range)
 
+  // 取上游的顺序很重要(实测踩出来的):
+  //   ① **先直连**: 用用户自己的网络。国内 CDN/直播源经常只认国内家宽 IP, 而我们的
+  //      Cloudflare 出口会被 403(甚至端口不被允许) —— 之前"先走 Worker"就会整片播不了;
+  //   ② 直连失败(跨域被拦/混合内容 http/https)再走 Worker: 由服务端代取, 并代填 Referer/UA。
   let upstream = null;
-  async function tryFetch(target, hdrs) {
-    const ctl = new AbortController();
-    const timer = setTimeout(() => { try { ctl.abort(); } catch (e) {} }, 12000);
-    try {
-      return await fetch(target, { headers: hdrs || {}, redirect: 'follow', mode: 'cors', signal: ctl.signal });
-    } finally { clearTimeout(timer); }
-  }
-  try {
-    if (useF) upstream = await tryFetch(proxyUrl(u, '/f', r, c), {});
-    else if (useP) upstream = await tryFetch(proxyUrl(u, '/p', r, c), range ? { Range: range } : {});
-  } catch (e) { upstream = null; }
+  const proxiedPath = looksPlaylist ? '/f' : '/p';
+  try { upstream = await tryFetch(u, headers); } catch (e) { upstream = null; }
   if (!upstream || !upstream.ok) {
-    try {
-      const ctl2 = new AbortController();
-      const t2 = setTimeout(() => { try { ctl2.abort(); } catch (e) {} }, 12000);
-      try { upstream = await fetch(u, { headers, redirect: 'follow', signal: ctl2.signal }); }
-      finally { clearTimeout(t2); }
-    } catch (e) {
-      return new Response('upstream failed: ' + e.message, { status: 504 });
+    if (PROXY) {
+      try {
+        upstream = await tryFetch(proxyUrl(u, proxiedPath, r, c), range ? { Range: range } : {});
+      } catch (e) { upstream = null; }
     }
   }
+  if (!upstream) return new Response('上游取不到(直连与代理都失败)', { status: 504 });
 
   const ctype = upstream.headers.get('Content-Type') || '';
   if (isM3u8(u, ctype) || looksPlaylist) {
