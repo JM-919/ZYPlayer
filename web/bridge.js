@@ -660,6 +660,8 @@
     adFilter: function (on) { adFilterOn = !!on; },
     adStats: function () { return JSON.stringify({ on: adFilterOn, dropped: adDropped, note: adNote }); },
     proxyWrap: function (u, r, c) { return proxyWrap(u, r, c); },
+    // 图片走代理(豆瓣图床要 Referer, img 标签改不了): 详情页/首页海报用得到
+    imgVia: function (u) { return imgVia(u, 'https://m.douban.com/'); },
     douban: function (namesJson, limit) {
       var names = [];
       try { names = JSON.parse(namesJson) || []; } catch (e) {}
