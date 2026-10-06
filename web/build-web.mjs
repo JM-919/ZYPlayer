@@ -80,6 +80,9 @@ const inject = `
 `;
 const idx = join(dist, 'index.html');
 let html = readFileSync(idx, 'utf8');
+// 给 <html> 打上 web 标记(第一帧就有): 网页端的响应式样式全部写成 `html.web …`,
+// App 侧匹配不到; 放这里而不是只靠 JS, 是为了避免"首帧还是手机版样式"的闪动。
+html = html.replace(/<html(\s|>)/, '<html class="web"$1');
 if (html.indexOf('bridge.js') < 0) {
   // 插在界面脚本之前的第一个标记处; 找不到标记才退回 </body>
   const marks = ['<script src="hls.min.js">', '<script src="app.js">', '</body>'];
