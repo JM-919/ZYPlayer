@@ -223,7 +223,16 @@
     { name: 'iptv-org-cn', urls: ['https://iptv-org.github.io/iptv/countries/cn.m3u'] },
     { name: 'okay-iptv4', urls: ['https://raw.githubusercontent.com/songlees355-wq/okay/main/IPTV4%E6%B5%8B%E8%AF%95.txt'] },
     { name: 'okay-abroad', urls: ['https://raw.githubusercontent.com/songlees355-wq/okay/main/%E5%9B%BD%E5%A4%96%E7%94%B5%E8%A7%86%E5%8F%B02026.txt'] },
-    { name: 'zonghe', urls: ['http://193.123.86.190:14888/TV/iptv.php'], ua: 'bingcha/1.1 (mianfeifenxiang)' }
+    { name: 'zonghe', urls: ['http://193.123.86.190:14888/TV/iptv.php'], ua: 'bingcha/1.1 (mianfeifenxiang)' },
+    // ↓ 从聚玩盒子 jsonlist(单仓) 抓下来并**逐条真测**过的(2026-10):
+    //   Worker 能取到、且里面有大量 https 频道 —— 这些才是网页端真能播的部分。
+    { name: 'guovin', urls: ['https://raw.githubusercontent.com/Guovin/iptv-api/gd/output/result.m3u'] },
+    { name: 'suxuang', urls: ['https://raw.githubusercontent.com/suxuang/myIPTV/main/ipv4.m3u'] },
+    { name: 'szyyds', urls: ['https://z.szyyds.cn/iptv'] },
+    { name: 'legal-iptv', urls: ['https://raw.githubusercontent.com/gambiarras/legal-iptv/refs/heads/main/playlist.m3u'] },
+    { name: 'bmch', urls: ['https://gh.halonice.com/https:/raw.githubusercontent.com/big-mouth-cn/tv/main/iptv-ok.m3u'] },
+    { name: 'rihou', urls: ['http://rihou.cc:555/ggg.nzk'] },
+    { name: 'aptv', urls: ['https://raw.githubusercontent.com/Kimentanm/aptv/master/m3u/iptv.m3u'] }
   ];
   function userLive() {
     try { return JSON.parse(localStorage.getItem('zy_live') || '[]') || []; } catch (e) { return []; }
