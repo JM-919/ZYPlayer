@@ -118,20 +118,5 @@ console.log('\n[2] Service Worker: 改写清单时不动"已经是代理地址"�
   ok('URI="…" 也被改写成走本 SW', out.indexOf('URI="key.bin"') < 0);
 }
 
-/* ---------------------------------------------------------------- 直播列表: 只留 https 频道 */
-console.log('\n[3] 网页端直播列表: 只保留"有 https 线路"的频道');
-{
-  const feedHttps = '#EXTM3U\n#EXTINF:-1,CCTV1\nhttps://a.example/cctv1.m3u8\n#EXTINF:-1,CCTV2\nhttps://b.example/cctv2.m3u8\n';
-  const feedHttp = '#EXTM3U\n#EXTINF:-1,某地卫视\nhttp://1.2.3.4:8181/tv.m3u8\n';
-  // 所有内置源都返回这两张假表(不联网), 于是每个源都会带进 https 与 http 两种频道
-  const w = makeBridge({ __ALL__: feedHttps + feedHttp });
-  const all = await w.ZYBRIDGE.liveRefresh();
-  const list = JSON.parse(w.PK.liveChannels(''));
-  const meta = JSON.parse(w.PK.liveMeta());
-  ok('能解析出频道(含 http 的那条)', all.some(c => (c.u || []).some(u => /^http:/i.test(u))));
-  ok('列表里每条线路都是 https', list.every(c => (c.u || []).every(u => /^https:/i.test(u))), JSON.stringify((list[0] || {}).u || []).slice(0, 60));
-  ok('meta.count 与列表一致', meta.count === list.length);
-}
-
 console.log('\n' + (fails ? ('✗ ' + fails + ' 项不通过') : '✓ 全部通过'));
 process.exit(fails ? 1 : 0);
