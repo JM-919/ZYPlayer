@@ -178,66 +178,118 @@
     html.web .sec{margin:10px 2px 6px;}
     html.web #ptop,html.web #pbot{padding-left:12px;padding-right:12px;}
   }
-  /* ================= 网页版视觉升级(梦幻一点) =================
-     所有选择器都带 `html.web` 前缀 —— 那个 class 只有网页版产物才有(构建时写进 <html>),
-     所以下面无论写什么, Android App 都不会匹配到(不越界)。
-     只用老内核也认的属性(transform/transition/animation/box-shadow/渐变), 不用 mask、
-     不用 prefers-reduced-motion 之类会被 csscheck 判超基线的东西。 */
-  html.web{--glow:0 0 24px rgba(140,120,255,.35);}
-  html.web body{letter-spacing:.2px;}
-  /* 背景: 让原本的光斑缓慢"呼吸", 画面不死板 */
-  html.web body::before{animation:zyAurora 24s ease-in-out infinite alternate;}
-  @keyframes zyAurora{
-    0%{transform:scale(1) translateY(0);opacity:.95;}
-    100%{transform:scale(1.12) translateY(-1.5%);opacity:1;}
+  /* ================= 网页版新皮肤 · Aurora Glass(整套换) =================
+     这是一层**独立皮肤**: 只认 `html.web`(构建时写进 <html>, App 永远匹配不到), 所以整套换
+     都不会动到安卓 App。设计语言与旧版不同:
+       · 配色: 极光三色(紫 #7c5cff / 青 #22d3ee / 粉 #f472b6), 深空底色 + 极光晕
+       · 结构: 顶栏变成"悬浮岛"(圆角玻璃块), 首页搜索做成 hero 大输入, 卡片用 16:9 影视砖
+       · 层级: 详情页封面做背景虚化层; 抽屉带"把手"; 播放器控件做成悬浮胶囊
+       · 动效: 卡片进场 + 悬停微浮, 极光缓慢漂移, 进度条发光 */
+  html.web{
+    --z-v:#7c5cff; --z-c:#22d3ee; --z-p:#f472b6;
+    --z-bg:#06070d; --z-bg2:#0b0e18;
+    --z-line:rgba(255,255,255,.10);
+    --z-glow:0 0 26px rgba(124,92,255,.45);
+    --z-card:linear-gradient(180deg,rgba(255,255,255,.075),rgba(255,255,255,.025));
   }
-  /* 顶栏: 玻璃 + 底部一道渐变亮线 */
-  html.web header{position:relative;padding-top:11px;padding-bottom:11px;}
-  html.web header::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:1px;
-    background:linear-gradient(90deg,transparent,rgba(140,120,255,.55),rgba(0,200,255,.45),transparent);}
-  html.web header .logo{box-shadow:0 0 0 1px rgba(255,255,255,.14), 0 6px 18px rgba(104,78,255,.35);}
-  html.web header h1{background:linear-gradient(92deg,#eef3fb 10%,#b9a6ff 55%,#7fd8ff 95%);
+  html.web body{background:var(--z-bg);}
+  /* 极光背景: 三团色雾缓慢漂移 */
+  html.web body::before{
+    background:
+      radial-gradient(44% 34% at 8% 2%, rgba(124,92,255,.42), transparent 62%),
+      radial-gradient(38% 30% at 98% 6%, rgba(34,211,238,.30), transparent 64%),
+      radial-gradient(46% 34% at 88% 92%, rgba(244,114,182,.22), transparent 66%),
+      radial-gradient(50% 36% at 26% 104%, rgba(34,211,238,.16), transparent 66%);
+    animation:zyAuroraDrift 30s ease-in-out infinite alternate;
+  }
+  @keyframes zyAuroraDrift{
+    0%{transform:scale(1) translate3d(0,0,0);}
+    100%{transform:scale(1.1) translate3d(-1.2%,-1.6%,0);}
+  }
+  /* 详情页封面做背景虚化(JS 把封面地址写进 --z-poster) */
+  html.web body::after{
+    content:'';position:fixed;top:0;right:0;bottom:0;left:0;z-index:0;pointer-events:none;opacity:.30;
+    background-image:var(--z-poster,none);background-size:cover;background-position:center;
+    filter:blur(46px) saturate(140%);transition:opacity .4s ease;
+  }
+  /* 顶栏: 悬浮玻璃岛 */
+  html.web header{
+    margin:10px 12px 2px;padding:10px 14px;border-radius:20px;border:1px solid var(--z-line);
+    background:linear-gradient(180deg,rgba(255,255,255,.10),rgba(255,255,255,.035));
+    backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);
+    box-shadow:0 14px 40px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.16);
+  }
+  html.web header::after{display:none;}
+  html.web header h1{font-size:17px;letter-spacing:.4px;
+    background:linear-gradient(92deg,#fff 8%,#c7b8ff 52%,#8fe9ff 96%);
     -webkit-background-clip:text;background-clip:text;color:transparent;}
-  /* 卡片: 更圆、更"玻璃", 悬停浮起 + 一道斜向高光扫过 */
-  html.web .item{border-radius:15px;position:relative;
+  html.web header .logo{border-radius:14px;background:linear-gradient(160deg,var(--z-v),var(--z-c));
+    box-shadow:var(--z-glow);}
+  html.web header .sub{color:#93a3bd;}
+  html.web #navScroll .ghost{border-radius:999px;padding:7px 13px;
+    background:rgba(255,255,255,.06);border:1px solid var(--z-line);}
+  html.web #navScroll .ghost:hover{background:rgba(124,92,255,.22);border-color:rgba(124,92,255,.5);}
+  /* 首页 hero: 大搜索框 + 光晕 */
+  html.web #v-home .bar:first-child{margin:16px 0 6px;}
+  html.web #v-home .bar:first-child input{
+    height:52px;font-size:15px;border-radius:18px;padding:0 18px;
+    background:linear-gradient(180deg,rgba(255,255,255,.09),rgba(255,255,255,.03));
+    border:1px solid rgba(124,92,255,.34);
+    box-shadow:0 10px 34px rgba(0,0,0,.42), 0 0 0 1px rgba(124,92,255,.12), inset 0 1px 0 rgba(255,255,255,.14);
+  }
+  html.web #v-home .bar:first-child input:focus{border-color:var(--z-v);box-shadow:0 0 0 4px rgba(124,92,255,.18), 0 10px 34px rgba(0,0,0,.45);}
+  html.web .chips button{border-radius:999px;background:rgba(255,255,255,.05);}
+  html.web .chips button.on{background:linear-gradient(180deg,var(--z-v),#5b3fe0);color:#fff;border-color:transparent;
+    box-shadow:0 8px 22px rgba(124,92,255,.45);}
+  /* 卡片: 影视砖 */
+  html.web .item{border-radius:18px;background:var(--z-card);border:1px solid var(--z-line);
+    box-shadow:0 10px 30px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.12);
     transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;}
-  html.web .item::after{content:'';position:absolute;top:0;left:-60%;width:45%;height:100%;pointer-events:none;
-    background:linear-gradient(100deg,transparent,rgba(255,255,255,.16),transparent);
-    transform:skewX(-18deg);opacity:0;transition:opacity .25s ease, left .55s ease;}
-  html.web .item:hover{border-color:rgba(160,140,255,.45);box-shadow:0 14px 34px rgba(0,0,0,.5), 0 0 0 1px rgba(150,130,255,.22), inset 0 1px 0 rgba(255,255,255,.16);}
-  html.web .item:hover::after{opacity:1;left:115%;}
-  html.web .item .nm{background:linear-gradient(180deg,rgba(0,0,0,0),rgba(0,0,0,.55));}
-  /* 按钮/输入: 胶囊 + 柔光 */
-  html.web .ghost,html.web .chips button,html.web .pbtn{border-radius:999px;}
-  html.web .ghost:hover,html.web .pbtn:hover{box-shadow:0 0 0 1px rgba(160,140,255,.4), 0 6px 18px rgba(104,78,255,.28);}
-  html.web .chips button.on{box-shadow:0 6px 18px rgba(34,197,94,.35), inset 0 1px 0 rgba(255,255,255,.3);}
-  html.web input,html.web select{border-radius:14px;transition:box-shadow .18s ease, border-color .18s ease;}
-  html.web input:focus,html.web select:focus{border-color:rgba(160,140,255,.55);box-shadow:0 0 0 4px rgba(120,100,255,.16);}
-  /* 分区标题: 前面一颗发光小点 */
-  html.web .sec{position:relative;padding-left:14px;}
-  html.web .sec::before{content:'';position:absolute;left:0;top:50%;width:7px;height:7px;margin-top:-3.5px;border-radius:50%;
-    background:linear-gradient(180deg,#b9a6ff,#6ad6ff);box-shadow:0 0 10px rgba(160,140,255,.8);}
-  /* 抽屉/设置面板: 更圆、更柔 */
-  html.web #plist,html.web #qlist,html.web #pskip,html.web #pset{border-radius:18px 18px 0 0;
-    box-shadow:0 -18px 50px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.14);}
-  /* 播放器: 控制栏渐变遮罩, 进度条发光 */
-  html.web #ptop{background:linear-gradient(180deg,rgba(0,0,0,.72),rgba(0,0,0,0));}
-  html.web #pbot{background:linear-gradient(0deg,rgba(0,0,0,.78),rgba(0,0,0,0));}
-  html.web #pfill{background:linear-gradient(90deg,#8f7bff,#5ad1ff);box-shadow:0 0 12px rgba(140,120,255,.85);}
-  html.web #pbuf{background:rgba(255,255,255,.22);}
-  html.web #pthumb{box-shadow:0 0 12px rgba(160,140,255,.9);}
-  html.web .pbtn{transition:background .15s ease, box-shadow .18s ease, transform .12s ease;}
-  html.web #pcenter .big{transition:transform .18s ease, opacity .18s ease;}
-  /* 桌面: 滚动条也收拾一下 */
-  @media (min-width: 820px){
-    html.web ::-webkit-scrollbar{width:10px;height:10px;}
-    html.web ::-webkit-scrollbar-thumb{background:linear-gradient(180deg,rgba(160,140,255,.55),rgba(90,209,255,.45));
-      border-radius:99px;border:2px solid transparent;}
-    html.web ::-webkit-scrollbar-track{background:transparent;}
-    html.web .item .nm{font-size:13px;}
-    html.web .empty{color:#9fabbf;}
+  html.web .item .nm{font-weight:600;letter-spacing:.2px;}
+  html.web .item .sc,html.web .item .rm{border-radius:8px;backdrop-filter:var(--blurS);-webkit-backdrop-filter:var(--blurS);}
+  html.web .item .sc{background:linear-gradient(180deg,rgba(124,92,255,.9),rgba(34,211,238,.75));color:#0a0b12;font-weight:700;}
+  html.web .item:hover{border-color:rgba(124,92,255,.55);box-shadow:0 18px 40px rgba(0,0,0,.55), 0 0 0 1px rgba(124,92,255,.25), var(--z-glow);}
+  /* 继续观看: 横排影视砖 */
+  html.web .hlist{padding:2px 0 12px;}
+  html.web .hcard{border-radius:18px;border:1px solid var(--z-line);background:var(--z-card);
+    box-shadow:0 12px 30px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.12);}
+  html.web .hcard:hover{border-color:rgba(34,211,238,.5);box-shadow:0 16px 36px rgba(0,0,0,.5), 0 0 0 1px rgba(34,211,238,.22);}
+  html.web .hcard .hb{background:rgba(255,255,255,.14);}
+  html.web .hcard .hb i{background:linear-gradient(90deg,var(--z-c),var(--z-v));box-shadow:0 0 10px rgba(34,211,238,.7);}
+  /* 分区标题 */
+  html.web .sec{padding-left:16px;font-weight:700;letter-spacing:.3px;}
+  html.web .sec::before{content:'';position:absolute;left:2px;top:50%;width:4px;height:16px;margin-top:-8px;border-radius:6px;
+    background:linear-gradient(180deg,var(--z-c),var(--z-v));box-shadow:var(--z-glow);}
+  /* 详情页 */
+  html.web .dhead img{border-radius:16px;box-shadow:0 16px 40px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.10);}
+  html.web .dhead h2{font-weight:800;letter-spacing:.3px;}
+  html.web .tag{border-radius:8px;background:rgba(124,92,255,.16);border-color:rgba(124,92,255,.32);color:#cbbfff;}
+  html.web .desc{border-radius:16px;border-color:var(--z-line);background:linear-gradient(180deg,rgba(255,255,255,.07),rgba(255,255,255,.02));}
+  html.web .eps button{border-radius:12px;background:rgba(255,255,255,.05);border-color:var(--z-line);}
+  html.web .eps button:hover{border-color:rgba(34,211,238,.45);}
+  html.web .eps button.cur{background:linear-gradient(180deg,var(--z-v),#5b3fe0);color:#fff;border-color:transparent;box-shadow:var(--z-glow);}
+  /* 按钮统一成胶囊 */
+  html.web button.pbtn,html.web button.ghost,html.web #prow button{border-radius:999px;}
+  html.web button.pbtn{background:rgba(255,255,255,.07);border:1px solid var(--z-line);}
+  html.web button.pbtn:hover{background:rgba(124,92,255,.20);border-color:rgba(124,92,255,.5);box-shadow:var(--z-glow);}
+  /* 抽屉: 圆角 + 把手 */
+  html.web #plist,html.web #qlist,html.web #pskip,html.web #pset{border-radius:24px 24px 0 0;border-top:1px solid var(--z-line);}
+  html.web #plist::before,html.web #qlist::before,html.web #pskip::before,html.web #pset::before{
+    content:'';position:absolute;top:8px;left:50%;width:42px;height:4px;margin-left:-21px;border-radius:99px;
+    background:rgba(255,255,255,.28);
   }
   /* 播放器 */
+  html.web #player.on{background:#04050a;}
+  html.web #ptop{background:linear-gradient(180deg,rgba(4,5,10,.86),rgba(4,5,10,0));}
+  html.web #pbot{background:linear-gradient(0deg,rgba(4,5,10,.9),rgba(4,5,10,0));}
+  html.web .pbtn{border-radius:999px;}
+  html.web #ptitle{font-weight:700;letter-spacing:.3px;}
+  html.web #pcenter .big{background:rgba(10,12,22,.55);border:1px solid rgba(255,255,255,.18);
+    box-shadow:0 10px 34px rgba(0,0,0,.5), var(--z-glow);}
+  html.web #ptrack{background:rgba(255,255,255,.16);}
+  html.web #pfill{background:linear-gradient(90deg,var(--z-c),var(--z-v));box-shadow:0 0 14px rgba(124,92,255,.9);}
+  html.web #pbuf{background:rgba(255,255,255,.24);}
+    /* 播放器 */
   /* 坑(Android 7.x 点播放"没反应"的根因): 原来这里写的是 inset:0 —— 那是 Chrome 87+ 的简写,
      7.1 自带/未更新的 WebView(Chrome 51~86)直接丢掉这条声明, #player 只剩 position:fixed,
      没有偏移也没有尺寸 -> 整块塌成 0x0, 里面的绝对定位子元素( video/控制层 )全部量不到大小,
