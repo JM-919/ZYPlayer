@@ -58,13 +58,14 @@ for (const f of SPA_FILES) {
 const legacy = join(dist, 'legacy.css');
 if (!existsSync(legacy)) writeFileSync(legacy, '/* 老内核兼容样式; 见 tools/legacy_css.py */\n');
 
-const inject = `
+let inject = `
 <!-- 网页版: JS 桥(替代 Android 侧) + Service Worker(本地代理/广告过滤)
      必须插在 app.js **之前**: 界面代码靠 window.PK 判断"这是在浏览器里"(PK.web),
      插在后面的话 app.js 解析时 PK 还不存在, 网页端专属的界面调整(去掉投屏/解析/更新入口、
      补全屏与音量)就全都不会生效 —— 这个顺序踩过坑。 -->
-<script src="webconfig.js"></script>
-<script src="bridge.js"></script>
+<script src="webconfig.js?v=__BUILD__"></script>
+<script src="bridge.js?v=__BUILD__"></script>
+<script>window.__ZYBUILD='__BUILD__';</script>
 <script>
 (function () {
   if (!navigator.serviceWorker) { console.warn('[ZY影视 网页版] 这个浏览器没有 Service Worker, 广告过滤/需要 Referer 的源会失效'); return; }
@@ -85,9 +86,13 @@ let html = readFileSync(idx, 'utf8');
 // 产物里没有 <script src="bridge.js">, window.PK 永远不存在:
 // 表现就是"首页不加载 + 直播出不来 + 该删的按钮又回来"(2026-10 真踩过)。
 const MARK = '<!-- 网页版: JS 桥';
+// 构建指纹: 写进产物 + 资源 URL 的 ?v= —— 这样每次部署浏览器都会当成新地址去取,
+// 不会再出现"界面一点没变"(实测被缓存坑过好几轮)。
+const BUILD = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 12);
 // 给 <html> 打上 web 标记(第一帧就有): 网页端的响应式样式全部写成 `html.web …`,
 // App 侧匹配不到; 放这里而不是只靠 JS, 是为了避免"首帧还是手机版样式"的闪动。
 html = html.replace(/<html(\s|>)/, '<html class="web"$1');
+inject = inject.replace(/__BUILD__/g, BUILD);
 if (html.indexOf(MARK) < 0) {
   // 插在界面脚本之前的第一个标记处; 找不到标记才退回 </body>
   const marks = ['<script src="hls.min.js">', '<script src="app.js">', '</body>'];
@@ -121,13 +126,22 @@ window.ZYWEB = (function () {
    以前这一步没有, 于是"注入被静默跳过"一直没人发现, 一直到浏览器里 window.PK 不存在才暴露。 */
 {
   const built = readFileSync(idx, 'utf8');
-  const iBridge = built.indexOf('src="bridge.js"');
-  const iApp = built.indexOf('src="app.js"');
-  if (iBridge < 0) { console.error('[web] 构建失败: 产物里没有 <script src="bridge.js">, 网页端会整片坏掉'); process.exit(1); }
+  // 注意用 'src="bridge.js'(不带收尾引号): 现在脚本都带 ?v=版本号
+  const iBridge = built.indexOf('src="bridge.js');
+  const iApp = built.indexOf('src="app.js');
+  if (iBridge < 0) { console.error('[web] 构建失败: 产物里没有 <script src="bridge.js...">, 网页端会整片坏掉'); process.exit(1); }
   if (iApp > 0 && iBridge > iApp) { console.error('[web] 构建失败: bridge.js 必须插在 app.js 之前, 否则 PK 迟一步, 界面适配不会生效'); process.exit(1); }
-  if (built.indexOf('src="webconfig.js"') < 0) { console.error('[web] 构建失败: 产物里没有 webconfig.js'); process.exit(1); }
+  if (built.indexOf('src="webconfig.js') < 0) { console.error('[web] 构建失败: 产物里没有 webconfig.js'); process.exit(1); }
+  if (built.indexOf('__ZYBUILD') < 0) { console.error('[web] 构建失败: 产物里没有构建指纹 __ZYBUILD'); process.exit(1); }
   console.log('[web] 自检通过: 桥在界面脚本之前, webconfig 已注入');
 }
+
+// 界面自己的两个脚本也带版本号(HTML 里的引用改名, 文件本体不变)
+html = html.replace('<script src="app.js">', '<script src="app.js?v=' + BUILD + '"></script>')
+           .replace('<script src="hls.min.js">', '<script src="hls.min.js?v=' + BUILD + '"></script>');
+writeFileSync(idx, html);
+writeFileSync(join(dist, 'version.json'), JSON.stringify({ v: BUILD }) + '\n');
+console.log('[web] 构建版本: ' + BUILD);
 
 writeFileSync(join(dist, '.nojekyll'), '');
 console.log('[web] 生成完毕: ' + dist);
