@@ -1,5 +1,8 @@
 # ZY影视 · 网页版
 
+> **本文档只讲「网页版」**（`web/`）。安卓 App 的文档在**工程根目录**（`README.md` / `介绍.md` / `CHANGELOG*.md`）与
+> `pikachu-dl/README.md`。两套文档**分开保存、互不混写**：网页版仓库（GitHub）里只有网页版文档。
+
 > **在线地址：<https://zyplayer.hof12.ccwu.cc/>**（手机 / 电脑浏览器直接打开，无需安装）
 >
 > 这是 ZY影视 的网页版：影视聚合搜索 + 多源播放 + 广告过滤，全部跑在浏览器里。
@@ -11,6 +14,12 @@
 
 ---
 
+## 〇、本版范围：**只做点播，不做直播**
+
+网页版已经**整体摘掉直播功能**（入口按钮、直播页、频道表、相关设置与代码全部移除）——
+浏览器对国内直播源有 http 混合内容 / 端口白名单 / 地区限制三重硬限制，留着只会让人以为播放器坏了。
+**点播（搜索 / 详情 / 换源 / 播放 / 广告过滤）是唯一方向。** 要看直播请用安卓 App。
+
 ## 一、能做什么
 
 | 能力 | 网页版 | 说明 |
@@ -19,7 +28,6 @@
 | 详情 / 换源 | ✅ | 只切「同一部剧 + 同一集」，与 App 同规则 |
 | 播放（hls.js）+ **广告过滤** | ✅ | m3u8 由 Service Worker 清洗：CUE/SCTE-35 广告块、注入字幕组、广告分片、异目录插入块、短插播块 |
 | 需要 Referer / UA 的片源 | ✅ | 代理服务端代填 Referer / User-Agent |
-| 直播表 | ✅ | 拉表 + 解析 + 分组；探活是简化版 |
 | 解密 TVBox 配置（含 AES） | ✅ | WebCrypto AES-128-CBC，同款抽取逻辑 |
 | 豆瓣评分 | ✅ | 同样过代理 |
 | 看片进度 / 继续观看 | ✅ | 存 localStorage |
@@ -68,6 +76,38 @@ CF_API_TOKEN=xxx CF_ACCOUNT_ID=xxx node web/deploy-worker.mjs --domain 你的域
 
 想全自动：给仓库配 Secrets `CF_API_TOKEN` 与 Variables `CF_ACCOUNT_ID / CF_ZONE_ID / CF_WORKER_NAME / CF_DOMAIN`，
 之后 push 就会自动更新线上站点（没配则跳过该步，只构建）。
+
+### 国内源报 403？用「本机中转」彻底解决
+
+有些片源/CDN **只认国内家宽 IP**（Cloudflare 出口会被 403），而浏览器又读不到没有 CORS 头的
+跨域响应 —— 这类源在纯静态网页里就是播不了（安卓 App 能播是因为它用你手机的原生代理）。
+
+**解法：把中转跑在你自己电脑上**（零依赖，Node 18+）：
+
+```bash
+node web/relay/relay.mjs                 # 默认 http://127.0.0.1:8899  (用你自己的网络出口)
+# 或者: PORT=9000 TOKEN=你的口令 node web/relay/relay.mjs
+```
+
+页面上指过来（播放器「设置」里也能改，或控制台执行一次）：
+
+```js
+localStorage.setItem('zyweb_cfg', JSON.stringify({ proxy: 'http://127.0.0.1:8899', token: 'zyweb' }));
+location.reload();
+```
+
+之后所有取流都走你的网络：**地区限制、端口白名单、CORS 三个问题一起消失**。
+（页面侧出口优先级：用户显式配置的本机中转 > 站点自身 Worker > webconfig 里的代理。）
+
+### 改播放链路的自测(强烈建议先跑)
+
+```bash
+node web/selftest.mjs      # 桥/Service Worker 的代理不变量, 全绿才算改对
+```
+
+它钉死的是**被改坏过好几次**的不变量: 已经是代理地址的 URL 不许再包一层(否则 Worker 会
+fetch 自己 → Cloudflare 522)、没 SW 时必须交回原始地址(塞 Worker 地址会让国内 CDN 403)、
+SW 改写清单时不动已是代理的行。CI 里也跑了这一步。
 
 ## 四、本地预览
 
