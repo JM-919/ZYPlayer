@@ -3717,6 +3717,7 @@ function applyWebMode(){
   // 给 <html> 打上 web 标记: 新增的响应式样式全部写成 `html.web …`, 这样无论窗口多宽,
   // Android App(同一份 index.html)都不会匹配到 —— 网页端怎么改都不越界。
   try { document.documentElement.className = (document.documentElement.className + ' web').trim(); } catch(e){}
+  try { console.log('[ZY影视 网页版] 网页端适配已应用: 投屏/解析/更新/解密入口已移除, 全屏/音量/键盘已补上'); } catch(e){}
   function drop(el){ try { if (el && el.parentNode) el.parentNode.removeChild(el); } catch(e){} }
   // 帮助函数: 抽屉/页面**只隐藏不删节点** —— show()/closeSheets() 会把它们列进去循环设置样式,
   // 节点没了就是 null 访问异常, 整个导航会跟着坏(这是"越界改坏"的典型, 特意记一笔)
@@ -3794,7 +3795,7 @@ function applyWebMode(){
     var pl3 = $('player');
     // 有没有真正的鼠标: 触摸设备上浏览器会把触摸合成为 mousemove/click, 不判断就会"手指一点控制栏乱弹"
     var hasMouse = false;
-    try { hasMouse = !!(root.matchMedia && root.matchMedia('(hover: hover) and (pointer: fine)').matches); } catch(e){}
+    try { hasMouse = !!(window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches); } catch(e){}
     function inCtrl(el){
       try {
         if (!el) return false;
@@ -3838,17 +3839,24 @@ function applyWebMode(){
   syncFsBtn();               // 进来先按当前全屏状态写好按钮文案
 }
 
-/* 启动 */
-initSites();
-initPlayerSettings();      // 播放器/直播设置(画面比例/缓冲/超时/OSD/换台)先读回来再画界面
-initAutoNext();
-initSkipAndHistory();
-applyWebMode();           // 网页版: 去掉原生专属入口 + 补上全屏/音量/键盘(APP 里是空函数)
+/* 启动。
+   每一步各自 try/catch —— 以前只要其中一步抛错, 后面的启动项就整串不执行,
+   用户看到的是"首页不加载 + 网页端该去掉的按钮又回来了"(同一个异常的两个症状)。
+   现在一步失败只影响它自己, 并且会在控制台留一行原因。 */
+function bootStep(name, fn){
+  try { fn(); }
+  catch (e) { try { console.warn('[启动] ' + name + ' 失败: ' + (e && e.message)); } catch(e2){} }
+}
+bootStep('网页端适配', function(){ applyWebMode(); });   // 先做它: 只动 DOM, 绝不连累后面的界面初始化
+bootStep('站点列表', function(){ initSites(); });
+bootStep('播放器设置', function(){ initPlayerSettings(); });   // 画面比例/缓冲/超时/OSD/换台 先读回来再画界面
+bootStep('连播设置', function(){ initAutoNext(); });
+bootStep('跳过与记忆', function(){ initSkipAndHistory(); });
 /* 兜底: 万一 bridge.js 迟到(比如脚本顺序被人改回 app.js 在前), 等它出现再补做一次 ——
    不然"网页端该去掉的按钮"会原样留着(这个顺序问题真发生过一次)。 */
 (function webWaitForBridge(n){
   if (isWeb()) { applyWebMode(); return; }
-  if (n > 60) return;
+  if (n > 60) { try { console.warn('[ZY影视 网页版] 6 秒都没等到 window.PK —— bridge.js 没加载成功?'); } catch(e){} return; }
   setTimeout(function(){ webWaitForBridge(n + 1); }, 100);
 })(0);
 
