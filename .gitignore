@@ -1,0 +1,10 @@
+# 构建产物
+pikachu-dl/android/build/
+web/dist/
+*.class
+*.dex
+*.apk
+__pycache__/
+# 工具链里的大件(按需自取, 见 abuild/build.sh)
+abuild/lib/android.jar
+abuild/lib/r8.jar

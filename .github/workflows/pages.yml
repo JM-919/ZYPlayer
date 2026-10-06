@@ -1,0 +1,76 @@
+# 网页版自动构建 / 发布
+#
+#   push 到 main 之后自动:
+#     ① node web/build-web.mjs  → 把 Android 工程里的界面组装成 web/dist
+#     ② node web/deploy-worker.mjs → 把 web/dist 当**静态资源**塞进 Cloudflare Worker,
+#        Worker 同时提供站点与 /f /p 代理 —— 这是实际在用的线(https://zyplayer.hof12.ccwu.cc/)
+#     ③ 把 web/dist 传成 artifact(zyplayer-web), 手动部署可直接下载
+#     ④ 若仓库开了 Pages 就顺手也发一份到 https://<owner>.github.io/<repo>/ (备用)
+#
+# 第 ② 步需要仓库配置(没配就自动跳过, 构建仍绿):
+#   Secrets   : CF_API_TOKEN          (Cloudflare token: Workers Scripts:Edit)
+#   Variables : CF_ACCOUNT_ID, CF_ZONE_ID, CF_WORKER_NAME(如 cool-sea-dfd8), CF_DOMAIN(如 zyplayer.hof12.ccwu.cc)
+#
+# 关于第 ④ 步: 仓库还没开 Pages 时 GITHUB_TOKEN 无权「创建」Pages 站点
+#   (报 Resource not accessible by integration)。Settings → Pages → Source 选
+#   "GitHub Actions" 保存一次即可; 不用就设变量 ENABLE_GH_PAGES=false。
+name: pages
+
+on:
+  push:
+    branches: [master, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+      CF_ACCOUNT_ID: ${{ vars.CF_ACCOUNT_ID }}
+      CF_ZONE_ID: ${{ vars.CF_ZONE_ID }}
+      CF_WORKER_NAME: ${{ vars.CF_WORKER_NAME }}
+      CF_DOMAIN: ${{ vars.CF_DOMAIN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: 组装网页版(把 Android 工程里的界面搬到 web/dist)
+        run: node web/build-web.mjs
+      - name: 部署到 Cloudflare Worker(站点 + 代理)
+        if: env.CF_API_TOKEN != '' && env.CF_ACCOUNT_ID != ''
+        run: node web/deploy-worker.mjs --domain "$CF_DOMAIN"
+      - name: 打包 web/dist(手动部署可直接下载)
+        uses: actions/upload-artifact@v4
+        with:
+          name: zyplayer-web
+          path: web/dist
+      - name: 上传 GitHub Pages 工件
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/dist
+
+  deploy:
+    # 默认尝试发布; 设仓库变量 ENABLE_GH_PAGES=false 可关闭
+    if: vars.ENABLE_GH_PAGES != 'false'
+    # 站点还没开时这里会失败, 但不该让整个构建变红(构建/artifact 才是主产物)
+    continue-on-error: true
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
+      - id: deployment
+        uses: actions/deploy-pages@v4
