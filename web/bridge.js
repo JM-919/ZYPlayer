@@ -689,65 +689,22 @@
     liveAuto: function () { if (!liveList().length) PK.liveRefresh(); },
     liveSweep: function () { call('onLiveSweep', '网页版不做线路测速'); },
     /**
-     * 线路探活。以前这里写成 `call('onLiveProbe', '', [])` —— 回调 id 是**空串**,
-     * 而 playLive() 在 liveWait 里登记的是 'lv1'/'lv2'…, 于是 onLiveProbe 查不到记录直接 return:
-     * 表现就是「直播点了没反应, 播放器永远调不出来」。
-     * 现在真的探: 用代理把清单拉回来, 认 #EXTM3U(顺便取第一条分片地址), 再抽第一条分片做一次深探。
+     * 线路探活。两个坑都在这里踩过, 所以现在只保留"最稳"的实现:
+     *   ① 以前回调 id 传的是**空串**, 而 playLive() 在 liveWait 里登记的是 'lv1'/'lv2'… ——
+     *      onLiveProbe 查不到记录直接 return, 表现就是「点了直播, 播放器永远出不来」;
+     *   ② 后来改成真去拉清单+超时深探, 逻辑是清楚了, 但网页端这一层没有原生那套探测能力,
+     *      多一层异步就多一个"卡住不回调"的机会。现在**同步回调**, 保证播放器一定起来:
+     *      全部线路按 HLS 候选回报, 播不动时 App 自己的自动换线会接着试下一条。
      */
     liveProbe: function (id, urlsJson) {
       var urls = [];
       try { urls = JSON.parse(urlsJson) || []; } catch (e) {}
-      urls = urls.slice(0, 8);
-      var out = [], done = 0, sent = false;
-      function firstSeg(txt) {
-        var lines = String(txt || '').split(/\r?\n/);
-        for (var i = 0; i < lines.length; i++) {
-          var t = lines[i].trim();
-          if (t && t.charAt(0) !== '#') return t;
-        }
-        return '';
+      var out = [];
+      for (var i = 0; i < urls.length && i < 8; i++) {
+        if (!/^https?:\/\//i.test(String(urls[i] || ''))) continue;
+        out.push({ u: String(urls[i]), ok: true, k: 'm3u8', c: 200, ms: 0 });
       }
-      function finish() {
-        if (sent) return;
-        sent = true;
-        call('onLiveProbe', id, JSON.stringify(out));
-        // 深探(只做一条, 省流量): 能读清单的再拉一次第一个分片, 通了才标 "✓✓"
-        for (var i = 0; i < out.length; i++) {
-          if (out[i].ok && out[i].seg) { deepCheck(id, out[i]); return; }
-        }
-      }
-      function deepCheck(id2, rec) {
-        var base = rec.u.replace(/[^\/]*$/, '');
-        var seg = /^https?:/i.test(rec.seg) ? rec.seg : (base + rec.seg);
-        var t0 = Date.now();
-        var to = setTimeout(function () { call('onLiveDeep', id2, JSON.stringify([{ u: rec.u, ok: true, d: false, k: rec.k, c: rec.c, ms: rec.ms }])); }, 6000);
-        fetchText(seg, { referer: base, ua: '' }).then(function () {
-          clearTimeout(to);
-          call('onLiveDeep', id2, JSON.stringify([{ u: rec.u, ok: true, d: true, k: rec.k, c: rec.c, ms: Date.now() - t0 }]));
-        }).catch(function () {
-          clearTimeout(to);
-          call('onLiveDeep', id2, JSON.stringify([{ u: rec.u, ok: true, d: false, k: rec.k, c: rec.c, ms: Date.now() - t0 }]));
-        });
-      }
-      if (!urls.length) { finish(); return; }
-      urls.forEach(function (u) {
-        var t0 = Date.now(), settled = false;
-        function one(txt, st) {
-          if (settled) return;
-          settled = true;
-          var s = String(txt || '');
-          var isM3u8 = s.indexOf('#EXTM3U') >= 0;
-          var isFlv = /^\s*FLV/.test(s) || /\.flv(\?|$)/i.test(u);
-          var rec = { u: u, ok: isM3u8, k: isM3u8 ? 'm3u8' : (isFlv ? 'flv' : ''), c: st || 200, ms: Date.now() - t0 };
-          if (isM3u8) rec.seg = firstSeg(s);
-          out.push(rec);
-          if (++done === urls.length) finish();
-        }
-        var to = setTimeout(function () { one('', 0); }, 6500);   // 探活必须有超时: 不然卡住就永远播不出来
-        var ref = u.replace(/^(https?:\/\/[^\/]+).*$/, '$1/');
-        fetchText(u, { referer: ref }).then(function (t) { clearTimeout(to); one(t, 200); })
-          .catch(function () { clearTimeout(to); one('', 0); });
-      });
+      call('onLiveProbe', id, JSON.stringify(out));
     },
     liveAddSource: function (name, url) {
       var u = userLive(); u.push({ name: name || '自加', url: url }); saveUserLive(u);
