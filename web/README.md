@@ -69,6 +69,28 @@ CF_API_TOKEN=xxx CF_ACCOUNT_ID=xxx node web/deploy-worker.mjs --domain 你的域
 想全自动：给仓库配 Secrets `CF_API_TOKEN` 与 Variables `CF_ACCOUNT_ID / CF_ZONE_ID / CF_WORKER_NAME / CF_DOMAIN`，
 之后 push 就会自动更新线上站点（没配则跳过该步，只构建）。
 
+### 国内源报 403？用「本机中转」彻底解决
+
+有些片源/CDN **只认国内家宽 IP**（Cloudflare 出口会被 403），而浏览器又读不到没有 CORS 头的
+跨域响应 —— 这类源在纯静态网页里就是播不了（安卓 App 能播是因为它用你手机的原生代理）。
+
+**解法：把中转跑在你自己电脑上**（零依赖，Node 18+）：
+
+```bash
+node web/relay/relay.mjs                 # 默认 http://127.0.0.1:8899  (用你自己的网络出口)
+# 或者: PORT=9000 TOKEN=你的口令 node web/relay/relay.mjs
+```
+
+页面上指过来（播放器「设置」里也能改，或控制台执行一次）：
+
+```js
+localStorage.setItem('zyweb_cfg', JSON.stringify({ proxy: 'http://127.0.0.1:8899', token: 'zyweb' }));
+location.reload();
+```
+
+之后所有取流都走你的网络：**地区限制、端口白名单、CORS 三个问题一起消失**。
+（页面侧出口优先级：用户显式配置的本机中转 > 站点自身 Worker > webconfig 里的代理。）
+
 ### 改播放链路的自测(强烈建议先跑)
 
 ```bash
