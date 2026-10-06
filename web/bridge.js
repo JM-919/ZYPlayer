@@ -421,13 +421,37 @@
   /* ------------------------------------------------------------------ 本地代理(交给 Service Worker) */
   var SWTOKEN = Math.random().toString(16).slice(2, 10);
   /**
+   * 同源出口。站点自己就是那个 Cloudflare Worker, 所以 `https://站点/f|/p` 就能用,
+   * 而且: ① 不跨域(浏览器不会因缺 CORS 头黑屏); ② 有没有 Service Worker 都能用
+   * (没 SW 时请求直接到 Worker, 它会就地改写清单; 有 SW 时 SW 拦 /p 做广告过滤)。
+   * 这是直播/VOD 最稳的一条出口 —— 之前用跨域的 zyapi 域名, 一旦那边解析/被挡, 直播就整个黑屏。
+   */
+  function sameOriginProxy(url, referer, cookie) {
+    if (!url) return '';
+    var base = '';
+    try { base = location.origin + location.pathname.replace(/[^/]*$/, ''); } catch (e) { return ''; }
+    var s0 = String(url);
+    var looksPl = /\.m3u8(\?|$)/i.test(s0) || !/\.[a-z0-9]{2,4}(\?|$)/i.test(s0);
+    return base + (looksPl ? 'f' : 'p') + '?t=' + encodeURIComponent(PROXY_TOKEN) + '&q=' + b64u(url)
+      + (referer ? '&r=' + encodeURIComponent(referer) : '')
+      + (cookie ? '&c=' + encodeURIComponent(cookie) : '');
+  }
+  /** 站点和代理是不是同一台(线上就是) —— 是的话优先走同源, 少一层跨域风险 */
+  function sameHostProxy() {
+    try { return !!ZYPROXY && (new URL(ZYPROXY)).host === location.host; } catch (e) { return false; }
+  }
+
+  /**
    * 直播专用出口: 直接给 Worker 地址(不经过页面的 Service Worker)。
    * 为什么单开一个: 直播一旦卡在"旧 SW 直接跨域取流"上就是黑屏, 而且用户在浏览器里
    * 不一定刷新过 SW。Worker 侧现在会把清单里的每条地址改写成继续走它自己(见 proxy/worker.js),
    * 所以直播彻底不依赖 SW 也能播; App 侧没有这个桥方法, 会照旧走 LocalProxy。
    */
   function proxyLive(url, referer, cookie) {
-    if (!url || !ZYPROXY) return '';
+    if (!url) return '';
+    var so0 = sameOriginProxy(url, referer, cookie);
+    if (so0) return so0;                       // 线上: 站点就是 Worker —— 同源最稳
+    if (!ZYPROXY) return '';
     var s0 = String(url);
     if (s0.indexOf(ZYPROXY + '/f?') === 0 || s0.indexOf(ZYPROXY + '/p?') === 0) return url;
     var looksPl = /\.m3u8(\?|$)/i.test(s0) || !/\.[a-z0-9]{2,4}(\?|$)/i.test(s0);
@@ -450,6 +474,8 @@
     // ② Service Worker 还没接管(首次打开/刚更新)时不能返回裸地址: 浏览器直连上游普遍缺 CORS 头,
     //    直播就是"黑屏"。这时退回直接走 Cloudflare 代理, 至少能拿到字节。
     if (!root.navigator || !root.navigator.serviceWorker || !root.navigator.serviceWorker.controller) {
+      var so = sameOriginProxy(url, referer, cookie);
+      if (so) return so;                       // 没 SW: 同源出口(Worker 会改写清单)
       if (!ZYPROXY) return url;
       var looksPl = /\.m3u8(\?|$)/i.test(s0) || !/\.[a-z0-9]{2,4}(\?|$)/i.test(s0);
       return ZYPROXY + (looksPl ? '/f' : '/p') + '?t=' + encodeURIComponent(PROXY_TOKEN) + '&q=' + b64u(url)
