@@ -43,7 +43,12 @@ function show(v){
   try { if (isWeb()) window.scrollTo(0, 0); } catch(e) {}   // 网页端是"文档自然滚动"(像博客那样), 要滚窗口
 }
 /** 封面加载失败(部分图床防盗链): 换成片名首字占位, 不留空白块。 */
+/** 诊断用: 海报加载成功/失败计数(?debug=1 的面板上能看到) */
+function zyPicOk(el){
+  try { ZYDIAG.picOk++; ZYDIAG.lastPic = el && el.getAttribute('src') || ''; zyDiagDraw(); } catch(e) {}
+}
 function imgFallback(el){
+  try { ZYDIAG.picFail++; ZYDIAG.lastPic = el && el.getAttribute('src') || ''; zyDiagDraw(); } catch(e) {}
   try {
     var name = el.getAttribute('data-n') || '影';
     var ch = name.replace(/[\[\]（）()·]/g, '').slice(0, 1) || '影';
@@ -59,7 +64,7 @@ function card(it, idx, which){
   var rm = it.remarks || (it.epCount ? (it.epCount+"集") : "");
   return '<div class="item" data-name="' + esc(it.name) + '" onclick="openDetail(&quot;' + (which || 'home') + '&quot;,' + idx + ')">'
     + (it.score ? ('<div class="sc">' + esc(it.score) + '</div>') : "")
-    + '<img class="pic" loading="lazy" referrerpolicy="no-referrer" data-n="' + esc(it.name) + '" onerror="imgFallback(this)" src="' + esc(pic) + '" />'
+    + '<img class="pic" loading="lazy" referrerpolicy="no-referrer" data-n="' + esc(it.name) + '" onload="zyPicOk(this)" onerror="imgFallback(this)" src="' + esc(pic) + '" />'
     + '<div class="rm">' + esc(rm) + '</div>'
     + (it.siteName ? ('<div class="src">' + esc(it.siteName) + '</div>') : '')
     + '<div class="nm">' + esc(it.name) + '</div></div>';
@@ -68,6 +73,15 @@ function renderGrid(el, items, offset, which){
   var h = "";
   for (var i = 0; i < items.length; i++) h += card(items[i], (offset||0) + i, which);
   el.innerHTML = h || '<div class="empty">暂无数据</div>';
+  // 诊断(?debug=1): 首页数据回来时报个数与首张海报地址
+  try {
+    if (zyDiagOn()) {
+      ZYDIAG.home = which + ' ' + (items || []).length + ' 部';
+      ZYDIAG.lastPic = (items && items[0] && items[0].pic) || '(首页第一条没有海报字段)';
+      zyDiagDraw();
+      if (window.console && items && items[0]) console.log('[ZY诊断] 首页首条:', items[0].name, '| pic =', items[0].pic);
+    }
+  } catch(e) {}
 }
 
 /* ---------- 首页 ---------- */
@@ -602,10 +616,12 @@ var autoNext = true, nextTimer = null;
 /** 启动时把"播放器/直播设置"读回来并应用(画面比例、OSD 这些要立刻生效) */
 function initPlayerSettings(){
   psLoad();
+  try { if (isWeb()) applyWebPsDefaults(); } catch(e) {}   // ★ 必须在 psLoad() 之后: 否则会被覆盖回去
   try { PK.adFilter(!!PS.adf); } catch(e){}      // 广告过滤开关先同步给 Java(默认开)
   try { applyFit(); } catch(e){}
   psRender();
   setInterval(osdUpdate, 1000);
+  try { setInterval(zyDiagDraw, 1500); } catch(e) {}   // ?debug=1 时刷新诊断面板
 }
 function initAutoNext(){
   try { if (localStorage.getItem('pk_autonext') === '0') autoNext = false; } catch(e){}
@@ -3749,6 +3765,26 @@ resetUiState();
  * App 侧一个分支都不会进 —— 改网页端不会碰到 App 的行为。
  */
 function webV(){ return $('video'); }
+/**
+ * 网页端默认值(用户点名的那几项)。只在**第一次**生效并打标记, 之后用户自己改过的值不再被覆盖。
+ * 之所以要这么一个函数: 以前把默认值写在 applyWebMode() 里, 而它在 psLoad() **之前**跑,
+ * 结果立刻被"默认值+存档"盖回去 —— 用户看到的就是"说了默认关, 打开还是开"。
+ */
+function applyWebPsDefaults(){
+  var MARK = 'zy_web_defs_v2';
+  var seen = false;
+  try { seen = !!localStorage.getItem(MARK); } catch(e) {}
+  if (!seen) {
+    PS.silent = 1;        // 静默提示: 开
+    PS.osd = 0;           // 画面上显示(OSD): 关
+    PS.adAvoid = 0;       // 避开烧录广告源: 关
+    try { psSave(); } catch(e) {}
+    try { localStorage.setItem(MARK, '1'); } catch(e) {}
+  } else {
+    if (PS.silent === undefined) PS.silent = 1;
+  }
+}
+
 /** 网页端: 静默提示开关(默认开 = 只留"有用/出错"的提示) */
 function syncSilentUI(){ var b = $('psSilent'); if (b) b.textContent = PS.silent ? '开' : '关'; }
 function webToggleSilent(){
@@ -3863,6 +3899,29 @@ function webNeedGesture(){
   } catch(e){}
 }
 /** 网页版界面调整: 该删的入口删掉, 该补的 PC 能力补上 */
+/**
+ * 网页端诊断面板: 地址后加 `?debug=1` 才显示。
+ * 目的: 海报/榜单这类问题"看不见就猜", 有了它截图一次就能定位(别在正常使用时常驻)。
+ */
+var ZYDIAG = { home: '', picOk: 0, picFail: 0, lastPic: '' };
+function zyDiagOn(){ try { return location.search.indexOf('debug=1') >= 0 || localStorage.getItem('zy_debug') === '1'; } catch(e){ return false; } }
+function zyDiagDraw(){
+  if (!zyDiagOn()) return;
+  try {
+    var d = document.getElementById('zydiag');
+    if (!d) {
+      d = document.createElement('div');
+      d.id = 'zydiag';
+      d.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:9999;max-width:70%;background:rgba(0,0,0,.78);'
+        + 'color:#bff;font-size:10px;line-height:1.5;padding:6px 8px;border-radius:8px;word-break:break-all;'
+        + 'border:1px solid rgba(120,200,255,.35)';
+      document.body.appendChild(d);
+    }
+    d.textContent = '[诊断] ' + ZYDIAG.home + ' | 海报 成功' + ZYDIAG.picOk + '/失败' + ZYDIAG.picFail
+      + ' | 末条 ' + String(ZYDIAG.lastPic).slice(-70);
+  } catch(e) {}
+}
+
 function applyWebMode(){
   if (!isWeb()) return;
   if (window.__webModeApplied) return;      // 幂等: 迟到的补做不能重复挂监听
@@ -3920,13 +3979,7 @@ function applyWebMode(){
   //    观影时一直往画面上跳, 很影响体验。压掉例行提示, 只留"出错/需要你动手"的那些;
   //    设置里可以关掉这个开关(关掉后一切照旧, 一行提示都不省)。
   try {
-    if (PS.silent === undefined) PS.silent = 1;
-    // 网页端默认不显示 OSD: 那行每秒都在刷新(分辨率/时间/网速), 观感上就是"文字一直在跳"
-    if (PS.osd === undefined) PS.osd = 0;
-    // 网页端默认 **不** 避开烧录广告源(用户要求): 由用户自己在设置里打开
-    if (PS.adAvoid === undefined) PS.adAvoid = 0;
-    try { PS.adAvoid = 0; } catch(e) {}
-    try { if (PS.silent && PS.osdOnWeb !== 0) { PS.osd = 0; } } catch(e) {}
+    // 默认值已经由 applyWebPsDefaults() 在 psLoad() 之后设好了(见 initPlayerSettings), 这里只管"压提示"
     var KEEP = /(失败|不通|播不动|错误|异常|超时|不支持|无法|没|403|404|5\d\d|开声音|静音|解锁|已锁|锁定|试了|都放不动)/;
     var _sg = showGest, _ts = PK.toast;
     showGest = function (t) { try { if (PS.silent && !KEEP.test(String(t))) return; } catch (e) {} _sg(t); };
