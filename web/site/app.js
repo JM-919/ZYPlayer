@@ -3,6 +3,7 @@ var sites = [], curSite = "", curType = "", page = 1, homeLoading = false;
    网页端"只有原生做得到"的功能(投屏 / 解析线路 / 调起外部播放器 / 应用内更新 / 蜘蛛 jar)
    靠这个标记连按钮带入一起去掉。App 侧没有 PK.web, WEB 恒为 false —— App 行为一个字节不变。 */
 var WEB = false; try { WEB = !!(window.PK && PK.web); } catch(e){}
+function isWeb(){ try { return !!(window.PK && PK.web); } catch(e){ return false; } }
 var curItem = null, curEp = 0, hls = null;
 /* 首页与搜索各自一份数据源：曾共用 lastItems，导致"搜完再回首页点卡片 = 打开搜索结果" */
 var homeItems = [], searchItems = [];
@@ -3678,7 +3679,10 @@ function webNeedGesture(){
 }
 /** 网页版界面调整: 该删的入口删掉, 该补的 PC 能力补上 */
 function applyWebMode(){
-  if (!WEB) return;
+  if (!isWeb()) return;
+  if (window.__webModeApplied) return;      // 幂等: 迟到的补做不能重复挂监听
+  window.__webModeApplied = 1;
+  WEB = true;
   function drop(el){ try { if (el && el.parentNode) el.parentNode.removeChild(el); } catch(e){} }
   // 帮助函数: 抽屉/页面**只隐藏不删节点** —— show()/closeSheets() 会把它们列进去循环设置样式,
   // 节点没了就是 null 访问异常, 整个导航会跟着坏(这是"越界改坏"的典型, 特意记一笔)
@@ -3750,7 +3754,42 @@ function applyWebMode(){
     document.addEventListener('fullscreenchange', syncFsBtn);
     document.addEventListener('webkitfullscreenchange', syncFsBtn);
   } catch(e){}
-  // ⑥ 首次用户手势后把"浏览器自动静音"摘掉(有手势一定成功), 并恢复上次的音量
+  // ⑥ 桌面鼠标: 以前只有触摸事件会把控制栏叫出来, 电脑上"鼠标移上去什么都不出现"(用户反馈)
+  try {
+    var pl3 = $('player');
+    function inCtrl(el){
+      try {
+        if (!el) return false;
+        if (el.closest && el.closest('#ptop,#pbot,#plist,#qlist,#pskip,#pset,#plock,#pmask,#webtap')) return true;
+        return /BUTTON|INPUT|SELECT|LABEL|A|OPTION/.test(el.tagName || '');
+      } catch(e){ return false; }
+    }
+    function controlsVisible(){ var t = $('ptop'); return !!t && ('' + t.className).indexOf('hide') < 0; }
+    if (pl3) {
+      var lastMv = 0;
+      pl3.addEventListener('mousemove', function(){
+        var now = Date.now();
+        if (now - lastMv < 100) { lastUIAt = now; return; }   // 节流: 高频事件不用每次都重排
+        lastMv = now;
+        showUI();
+      });
+      pl3.addEventListener('mouseleave', function(){ try { hideUI(); } catch(e){} });
+      pl3.addEventListener('dblclick', function(ev){ if (inCtrl(ev.target)) return; toggleFullscreen(); });
+      pl3.addEventListener('click', function(ev){
+        if (inCtrl(ev.target) || (anySheetOpen && anySheetOpen())) return;   // 抽屉开着时单击不切播放
+        if (locked) { showUI(); return; }
+        if (!controlsVisible()) { showUI(); return; }         // 第一下先把控制栏叫出来(和手机端一致)
+        togglePlay(); showUI();
+      });
+    }
+  } catch(e){}
+  // 控制栏收起来时把鼠标指针也藏掉(桌面看片更像原生播放器)
+  try {
+    var _hui = hideUI, _sui = showUI;
+    hideUI = function(){ _hui(); try { $('player').style.cursor = 'none'; } catch(e){} };
+    showUI = function(){ _sui(); try { $('player').style.cursor = ''; } catch(e){} };
+  } catch(e){}
+  // ⑥b 首次用户手势后把"浏览器自动静音"摘掉(有手势一定成功), 并恢复上次的音量
   try {
     var sv = parseInt(localStorage.getItem('pk_vol') || '', 10);
     if (isFinite(sv)) webSetVolume(sv / 100, true);
@@ -3765,6 +3804,13 @@ initPlayerSettings();      // 播放器/直播设置(画面比例/缓冲/超时/
 initAutoNext();
 initSkipAndHistory();
 applyWebMode();           // 网页版: 去掉原生专属入口 + 补上全屏/音量/键盘(APP 里是空函数)
+/* 兜底: 万一 bridge.js 迟到(比如脚本顺序被人改回 app.js 在前), 等它出现再补做一次 ——
+   不然"网页端该去掉的按钮"会原样留着(这个顺序问题真发生过一次)。 */
+(function webWaitForBridge(n){
+  if (isWeb()) { applyWebMode(); return; }
+  if (n > 60) return;
+  setTimeout(function(){ webWaitForBridge(n + 1); }, 100);
+})(0);
 
 /* 内核自检 + 启动信号:
    - Java 侧 6 秒收不到 bootOk 就判定内核太老, 换提示页(免得白屏);
