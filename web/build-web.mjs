@@ -59,7 +59,10 @@ const legacy = join(dist, 'legacy.css');
 if (!existsSync(legacy)) writeFileSync(legacy, '/* 老内核兼容样式; 见 tools/legacy_css.py */\n');
 
 const inject = `
-<!-- 网页版: JS 桥(替代 Android 侧) + Service Worker(本地代理/广告过滤) -->
+<!-- 网页版: JS 桥(替代 Android 侧) + Service Worker(本地代理/广告过滤)
+     必须插在 app.js **之前**: 界面代码靠 window.PK 判断"这是在浏览器里"(PK.web),
+     插在后面的话 app.js 解析时 PK 还不存在, 网页端专属的界面调整(去掉投屏/解析/更新入口、
+     补全屏与音量)就全都不会生效 —— 这个顺序踩过坑。 -->
 <script src="webconfig.js"></script>
 <script src="bridge.js"></script>
 <script>
@@ -77,7 +80,14 @@ const inject = `
 `;
 const idx = join(dist, 'index.html');
 let html = readFileSync(idx, 'utf8');
-if (html.indexOf('bridge.js') < 0) html = html.replace('</body>', inject + '</body>');
+if (html.indexOf('bridge.js') < 0) {
+  // 插在界面脚本之前的第一个标记处; 找不到标记才退回 </body>
+  const marks = ['<script src="hls.min.js">', '<script src="app.js">', '</body>'];
+  for (const m of marks) {
+    const at = html.indexOf(m);
+    if (at > 0) { html = html.slice(0, at) + inject + html.slice(at); break; }
+  }
+}
 writeFileSync(idx, html);
 
 if (existsSync(join(here, 'webconfig.js'))) {
