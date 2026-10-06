@@ -1,5 +1,15 @@
 # Changelog (web edition)
 
+### Fix · Douban posters + clarify Douban's role (2026-10-07 late night)
+
+* **Third cause of blank posters**: the Service Worker's fallback upstream used to depend on whether the proxy
+  config had been read; without it the raw **418** was handed to the `<img>`. The fallback is now unconditional
+  (the site itself is the Worker, so same-origin `/p` works too).
+* **Douban's role is now fixed to three things**: rating / poster / plot. Playback always goes through the
+  scraper sources: tapping a collection item searches all sources by title, then opens the detail page.
+* Detail page now fills the gaps: the source's poster wins, otherwise Douban's (proxied with a Referer);
+  if the source has no plot, Douban's intro is shown.
+
 ### Fix · portrait layout was clipped (2026-10-07 late night)
 
 While copying the blog's responsive approach I changed two things I should not have; both reverted:
