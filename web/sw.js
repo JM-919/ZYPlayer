@@ -86,6 +86,8 @@ function abs(base, rel) {
   try { return new URL(rel, base).toString(); } catch (e) { return rel; }
 }
 function selfUrl(u, r, c) {
+  // 清单里可能已经是"Worker 改写过的绝对地址"(/f? 或 /p?) —— 那层代理已经很好了, 别再套一层
+  if (PROXY && (String(u).indexOf(PROXY + '/f?') === 0 || String(u).indexOf(PROXY + '/p?') === 0)) return u;
   const qs = 'p?t=' + SWTOKEN + '&q=' + b64u(u)
     + (r ? '&r=' + encodeURIComponent(r) : '') + (c ? '&c=' + encodeURIComponent(c) : '');
   return new URL(qs, self.location.origin + self.location.pathname.replace(/[^/]*$/, '')).toString();
