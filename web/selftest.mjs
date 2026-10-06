@@ -100,6 +100,27 @@ console.log('\n[1b] 桥: webconfig 里 proxy 没填时, 接口/豆瓣榜单仍�
   ok('出口里带的是配置里的令牌(不是写死的 zyweb)', u0.indexOf('t=a7') > 0, u0.slice(0, 90));
 }
 
+/* --------------------- 界面源码: 每个页面都必须能被 show() 切到(整屏空白的根因) */
+console.log('\n[1e] 界面: show() 的页面清单不许漏掉任何一个 section');
+{
+  const cands = [['../pikachu-dl/android/assets/index.html', '../pikachu-dl/android/assets/app.js'], ['site/index.html', 'site/app.js']];
+  let html = '', js = '';
+  for (const [h, a] of cands) {
+    const hf = join(here, h), af = join(here, a);
+    if (existsSync(hf) && existsSync(af)) { html = readFileSync(hf, 'utf8'); js = readFileSync(af, 'utf8'); break; }
+  }
+  ok('找得到界面源码', !!html && !!js);
+  const ids = [...html.matchAll(/<section\s+id="(v-[A-Za-z0-9_-]+)"/g)].map(m => m[1]);
+  ok('页面 section ≥ 8 个', ids.length >= 8, '实际 ' + ids.length + ': ' + ids.join(','));
+  ok('show() 改成从 DOM 现扫(showList)', /querySelectorAll\('#main section\[id\]'\)/.test(js));
+  // 若还有人写死一份白名单, 它必须把 HTML 里所有 section 都包含进去 —— 漏一个 = 点进去整屏空白
+  const lists = [...js.matchAll(/\[((?:\s*"v-[A-Za-z0-9_-]+"\s*,?)+)\]/g)].map(m => [...m[1].matchAll(/"(v-[A-Za-z0-9_-]+)"/g)].map(x => x[1]));
+  for (const l of lists) {
+    const missing = ids.filter(id => l.indexOf(id) < 0);
+    ok('写死的页面清单[' + l.length + ' 项]包含全部 section', missing.length === 0, missing.length ? ('漏掉: ' + missing.join(', ')) : '');
+  }
+}
+
 /* ------------------------------- 界面源码: 静默提示开关(值被纠正后必须重画文案) */
 console.log('\n[1d] 界面: 「静默提示」开关的默认值与文案(用户报过: 明明是开, 却显示关)');
 {

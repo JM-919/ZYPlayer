@@ -21,6 +21,23 @@ function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,
  * 这里先把 JSON 字面量整体过一遍 HTML 转义(& 先转), 解码后拿到的才是原样的 JSON 字面量。
  */
 function jsa(v){ return esc(JSON.stringify(String(v==null?"":v))); }
+/**
+ * 当前所有页面(section)的 id —— **从 DOM 里现扫**, 不再写死一份白名单。
+ * 血泪教训: 以前 show() 里写死了 ["v-home","v-search",…,"v-dec"], 新加的页面(赞助福利 v-sponsor)
+ * 忘了加进去, 结果点进去 = 把所有页面都隐藏、新的那个又没被显示 → **整屏空白**,
+ * 用户看到的就是"两端都没有免责声明和赞赏码"。以后再加页面只管写 HTML, 这里自动带上。
+ */
+function showList(){
+  try {
+    var es = document.querySelectorAll('#main section[id]');
+    if (es && es.length) {
+      var out = [];
+      for (var i = 0; i < es.length; i++) if (es[i].id) out.push(es[i].id);
+      if (out.length) return out;
+    }
+  } catch (e) {}
+  return ["v-home","v-search","v-detail","v-update","v-live","v-hist","v-crash","v-dec","v-sponsor"];
+}
 function show(v){
   // 播放器是 position:fixed + z-index:50, 切页面时如果不关掉会把整屏盖住
   var pl = $("player");
@@ -30,14 +47,14 @@ function show(v){
     var already = cur && ("" + cur.style.display) === "none";
     if (already) {
       var same = false;
-      ["v-home","v-search","v-detail","v-update","v-live","v-hist","v-crash","v-dec"].forEach(function(x){
+      showList().forEach(function(x){
         var e = $(x); if (e && ("" + e.style.display) !== "none" && x === v) same = true;
       });
       if (same) return;
     }
   } catch(e) {}
   if (pl && (pl.className || "").indexOf("on") >= 0 && v !== "v-player") { try { closePlayer(); } catch(e){} }
-  ["v-home","v-search","v-detail","v-update","v-live","v-hist","v-crash","v-dec"].forEach(function(x){ $(x).style.display = (x===v?"":"none"); });
+  showList().forEach(function(x){ var e = $(x); if (e) e.style.display = (x===v?"":"none"); });
   hideKwPrev();          // 换页就把搜索预览收掉, 免得它挂在别的视图上
   $("main").scrollTop = 0;
   try { if (isWeb()) window.scrollTo(0, 0); } catch(e) {}   // 网页端是"文档自然滚动"(像博客那样), 要滚窗口
