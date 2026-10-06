@@ -794,6 +794,62 @@
     root.setInterval(pushSwCfg, 5000);      // SW 会被浏览器回收, 配置隔一会儿补一次
   } catch (e) {}
 
+  /* ---------------------------------------------------------------- 版本自检 / 缓存自救
+     背景: 改完代码"界面一点没变"这件事, 前后被浏览器缓存、Cloudflare 边缘缓存坑过好几轮。
+     现在构建产物带指纹(__ZYBUILD + 静态资源 ?v= + /version.json), 页面自己会发现新旧不一致,
+     并且给一个明确可点的"刷新到新版"入口 —— 用户不用记得按 Ctrl+Shift+R。 */
+  function buildStamp() { try { return String(root.__ZYBUILD || ''); } catch (e) { return ''; } }
+  function showVersionTag() {
+    try {
+      var doc = root.document;
+      if (!doc || doc.getElementById('zyver')) return;
+      var h1 = doc.querySelector('header h1');
+      if (!h1) return;
+      var d = doc.createElement('span');
+      d.id = 'zyver';
+      d.className = 'dim';
+      d.style.cssText = 'font-size:10px;opacity:.65;margin-left:7px;vertical-align:middle';
+      d.textContent = 'v' + (buildStamp().slice(-6) || 'dev');
+      h1.parentNode.insertBefore(d, h1.nextSibling);
+    } catch (e) {}
+  }
+  function showUpdateHint(remote) {
+    try {
+      var doc = root.document;
+      if (!doc || doc.getElementById('zynewver')) return;
+      var d = doc.createElement('div');
+      d.id = 'zynewver';
+      d.textContent = '🔄 网页版有新版本，点这里刷新';
+      d.style.cssText = 'position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:99;'
+        + 'background:linear-gradient(180deg,#6f5bff,#4a36d6);color:#fff;font-size:13px;font-weight:600;'
+        + 'padding:10px 16px;border-radius:999px;box-shadow:0 10px 30px rgba(0,0,0,.45);cursor:pointer';
+      d.onclick = function () { try { root.location.reload(); } catch (e) {} };
+      doc.body.appendChild(d);
+    } catch (e) {}
+  }
+  function checkBuild() {
+    var cur = buildStamp();
+    if (!cur) return;
+    fetch('/version.json?t=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (!j || !j.v || j.v === cur) return;
+        var pl = root.document && root.document.getElementById('player');
+        var playing = pl && ('' + pl.className).indexOf('on') >= 0;
+        // 没在看片就直接换新版(不留旧版); 看片中只提示, 不打断
+        if (!playing) { try { root.location.reload(); } catch (e) {} return; }
+        showUpdateHint(j.v);
+      }).catch(function () {});
+  }
+  try {
+    showVersionTag();
+    setTimeout(checkBuild, 3000);
+    setInterval(checkBuild, 5 * 60 * 1000);
+    if (root.document) root.document.addEventListener('visibilitychange', function () {
+      if (!root.document.hidden) checkBuild();
+    });
+  } catch (e) {}
+
   root.VOD = VOD; root.PK = PK;
   root.ZY_onAdStats = function (s) { adDropped = s.dropped || adDropped; adNote = s.note || adNote; };
   console.log('[ZY影视 网页版] 桥已就绪; CORS 代理 = ' + (ZYPROXY || '(未配置, 只有允许跨域的接口能用)'));
