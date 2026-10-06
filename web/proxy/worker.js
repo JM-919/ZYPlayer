@@ -155,15 +155,21 @@ export default {
     const ct = up.headers.get('Content-Type') || '';
     // 清单: 就地改写成继续走本 Worker(页面那边的 Service Worker 过期也不影响播放)
     if (url.pathname === '/f' && (up.status === 200) && (/mpegurl/i.test(ct) || /\.m3u8(\?|$)/i.test(t.pathname) || !/\.[a-z0-9]{2,4}(\?|$)/i.test(t.pathname))) {
-      const text = await up.text();
-      if (text.indexOf('#EXTM3U') >= 0) {
+      // 先按字节取回来再判断是不是清单 —— 直接 .text() 会把"其实不是清单"的二进制解坏
+      const buf = await up.arrayBuffer();
+      const head = new TextDecoder().decode(buf.slice(0, 7));
+      if (head === '#EXTM3U') {
+        const text = new TextDecoder().decode(buf);
         const body = rewritePlaylist(text, t.toString(), new URL(req.url).origin, TOKEN, r, c);
         return new Response(body, {
           status: 200,
           headers: Object.assign({}, CORS, { 'Content-Type': 'application/vnd.apple.mpegurl' })
         });
       }
-      return new Response(text, { status: up.status, headers: Object.assign({}, CORS, { 'Content-Type': ct || 'text/plain' }) });
+      const h2 = new Headers(CORS);
+      if (ct) h2.set('Content-Type', ct);
+      h2.set('Accept-Ranges', up.headers.get('Accept-Ranges') || 'bytes');
+      return new Response(buf, { status: up.status, headers: h2 });
     }
     const out = new Headers(CORS);
     ['Content-Type', 'Content-Length', 'Content-Range', 'Accept-Ranges', 'Cache-Control', 'Last-Modified']
