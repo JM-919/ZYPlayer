@@ -136,8 +136,23 @@ self.addEventListener('fetch', event => {
 });
 
 async function handle(request, url) {
-  const { u, r, c } = q(url.toString());
+  let { u, r, c } = q(url.toString());
   if (!u) return new Response('bad request', { status: 400 });
+  // 名单里的地址可能是"Worker 改写过的自家地址"(同源 /f?… 或 /p?…)。
+  // 那种地址直接交给 Worker 就等于**跳过了"先直连(用户自己的 IP)"这一步** ——
+  // 国内 CDN 挡 Cloudflare 时就会 403(用户反馈的"有些源还是 403")。
+  // 这里把它解开, 拿真正的目标继续走下面的"直连优先 / Worker 兜底"。
+  try {
+    const selfBase = self.location.origin + self.location.pathname.replace(/[^/]*$/, '');
+    if (u.indexOf(selfBase + 'f?') === 0 || u.indexOf(selfBase + 'p?') === 0) {
+      const inner = q(u);
+      if (inner.u && inner.u !== u) {
+        u = inner.u;
+        if (!r && inner.r) r = inner.r;
+        if (!c && inner.c) c = inner.c;
+      }
+    }
+  } catch (e) {}
   await loadCfgFile();
   const headers = {};
   if (r) headers['Referer'] = r;
