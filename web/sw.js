@@ -74,8 +74,13 @@ self.addEventListener('message', event => {
     if (d.token) PROXY_TOKEN = String(d.token);
   }
 });
+// 站点与代理同一台时用同源(少一次跨域); 分开部署时仍用 PROXY
+function proxyBase() {
+  try { if (PROXY && (new URL(PROXY)).host === self.location.host) return self.location.origin; } catch (e) {}
+  return PROXY;
+}
 function proxyUrl(u, path, r, c) {
-  return PROXY + path + '?t=' + encodeURIComponent(PROXY_TOKEN) + '&q=' + b64u(u)
+  return proxyBase() + path + '?t=' + encodeURIComponent(PROXY_TOKEN) + '&q=' + b64u(u)
     + (r ? '&r=' + encodeURIComponent(r) : '') + (c ? '&c=' + encodeURIComponent(c) : '');
 }
 
@@ -87,6 +92,8 @@ function abs(base, rel) {
 }
 function selfUrl(u, r, c) {
   // 清单里可能已经是"Worker 改写过的绝对地址"(/f? 或 /p?) —— 那层代理已经很好了, 别再套一层
+  var _pb = proxyBase();
+  if (_pb && (String(u).indexOf(_pb + '/f?') === 0 || String(u).indexOf(_pb + '/p?') === 0)) return u;
   if (PROXY && (String(u).indexOf(PROXY + '/f?') === 0 || String(u).indexOf(PROXY + '/p?') === 0)) return u;
   const qs = 'p?t=' + SWTOKEN + '&q=' + b64u(u)
     + (r ? '&r=' + encodeURIComponent(r) : '') + (c ? '&c=' + encodeURIComponent(c) : '');
