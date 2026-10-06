@@ -2716,7 +2716,9 @@ function liveNextLine(reason){
   if (!curItem || !curItem.live || !curItem.eps || !curItem.eps.length) return;
   var now = Date.now();
   if (now - liveSwitchFrom > 60000) { liveSwitchN = 0; liveSwitchFrom = now; }
-  if (now - liveSwitchAt < 1500) return;                       // 同一波错误只换一次
+  // 同一波错误只换一次。网页端放宽到 4 秒: 浏览器里起画面本来就慢一点,
+  // 1.5 秒换一条会"刷刷刷"闪个不停(用户原话: 切换速度快到离谱)。
+  if (now - liveSwitchAt < (WEB ? 4000 : 1500)) return;
   if (liveSwitchN >= curItem.eps.length + 2) {
     setBig('err');
     hideLoad();
