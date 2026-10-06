@@ -40,6 +40,7 @@ function show(v){
   ["v-home","v-search","v-detail","v-update","v-live","v-hist","v-crash","v-dec"].forEach(function(x){ $(x).style.display = (x===v?"":"none"); });
   hideKwPrev();          // 换页就把搜索预览收掉, 免得它挂在别的视图上
   $("main").scrollTop = 0;
+  try { if (isWeb()) window.scrollTo(0, 0); } catch(e) {}   // 网页端是"文档自然滚动"(像博客那样), 要滚窗口
 }
 /** 封面加载失败(部分图床防盗链): 换成片名首字占位, 不留空白块。 */
 function imgFallback(el){
@@ -359,12 +360,33 @@ function renderSearch(){
   searchItems = list;
   renderGrid(document.getElementById('searchGrid'), list, 0, 'search');
   fetchDouban(searchItems);
+  // 「首页点了豆瓣榜单项」-> 搜索结果里一出现同名条目就自动进详情(边收边显示, 所以在这里等)
+  if (pendingOpenName && list.length) {
+    for (var pi = 0; pi < list.length; pi++) {
+      if (sameTitle(list[pi].name, pendingOpenName)) {
+        var want = pendingOpenName; pendingOpenName = '';
+        try { showGest('找到「' + want + '」，正在读详情…'); } catch(e) {}
+        openDetail('search', list[pi]._idx);
+        return;
+      }
+    }
+  }
 }
 
+var pendingOpenName = '';      // 等待"按片名搜到同名结果就自动打开"的名字(首页豆瓣榜单项用)
 function openDetail(which, i){
   if (typeof which === 'number' || which == null) { i = which; which = 'home'; }   /* 旧调用兼容 */
   var it = listOf(which)[i];
   if (!it) return;
+  // 豆瓣榜单项只有片名/海报/评分, **没有源信息**: 按片名去聚合搜索, 收到同名结果就自动进详情
+  if (!it.site || !it.id) {
+    pendingOpenName = it.name;
+    openSearch();
+    var kwb = document.getElementById('kw');
+    if (kwb) kwb.value = it.name;
+    doSearch();
+    return;
+  }
   lastMainView = (which === 'search') ? 'v-search' : 'v-home';
   show('v-detail');
   document.getElementById('v-detail').innerHTML = '<div class="empty">读取详情…(拿不到直链会自动换源)</div>';
@@ -3884,6 +3906,9 @@ function applyWebMode(){
     if (PS.silent === undefined) PS.silent = 1;
     // 网页端默认不显示 OSD: 那行每秒都在刷新(分辨率/时间/网速), 观感上就是"文字一直在跳"
     if (PS.osd === undefined) PS.osd = 0;
+    // 网页端默认 **不** 避开烧录广告源(用户要求): 由用户自己在设置里打开
+    if (PS.adAvoid === undefined) PS.adAvoid = 0;
+    try { PS.adAvoid = 0; } catch(e) {}
     try { if (PS.silent && PS.osdOnWeb !== 0) { PS.osd = 0; } } catch(e) {}
     var KEEP = /(失败|不通|播不动|错误|异常|超时|不支持|无法|没|403|404|5\d\d|开声音|静音|解锁|已锁|锁定|试了|都放不动)/;
     var _sg = showGest, _ts = PK.toast;
