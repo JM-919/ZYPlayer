@@ -1277,7 +1277,8 @@ function playEp(i){
       if (myHls !== hls) return;                    // 这条线路早被换掉了
       try { notePlayErr(d, playUrl); } catch(err){}   // 记下真实原因(网页端会把它在"都播不动"时显示出来)
       if (d && d.fatal) {
-        try { showPlayErrLine(); } catch(err){}
+        // 这里**不显示**错误行: hls.js 起播途中常有"先 404/超时、随后又成功"的情况,
+        // 用户会先看到一行"播放失败: 404"再正常播放(反馈过)。只在真的放弃换源时才显示。
         autoSwitchSource('HLS:' + (d.details || ''));
         setBig('err');
         document.getElementById('ptitle').textContent = curItem.name + ' · ' + ep.name + (srcList.length > 1 ? ' (这条线路失效, 正在自动换源…)' : ' (加载失败)');
@@ -2878,6 +2879,7 @@ function autoSwitchSource(reason, force){
   }
   if (autoSwitching) return;
   if (!srcList || srcList.length < 2) {
+    try { showPlayErrLine(); } catch(e) {}     // 真的没备用源了才把原因留在屏幕上
     showGest('这条线路播不动, 且没有备用源');
     return;
   }
