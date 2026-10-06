@@ -232,7 +232,8 @@
     { name: 'legal-iptv', urls: ['https://raw.githubusercontent.com/gambiarras/legal-iptv/refs/heads/main/playlist.m3u'] },
     { name: 'bmch', urls: ['https://gh.halonice.com/https:/raw.githubusercontent.com/big-mouth-cn/tv/main/iptv-ok.m3u'] },
     { name: 'rihou', urls: ['http://rihou.cc:555/ggg.nzk'] },
-    { name: 'aptv', urls: ['https://raw.githubusercontent.com/Kimentanm/aptv/master/m3u/iptv.m3u'] }
+    { name: 'aptv', urls: ['https://raw.githubusercontent.com/Kimentanm/aptv/master/m3u/iptv.m3u'] },
+    { name: 'szyyds-x', urls: ['https://szyyds.cn/tv/live/x.txt'] }
   ];
   function userLive() {
     try { return JSON.parse(localStorage.getItem('zy_live') || '[]') || []; } catch (e) { return []; }
