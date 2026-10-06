@@ -69,6 +69,16 @@ CF_API_TOKEN=xxx CF_ACCOUNT_ID=xxx node web/deploy-worker.mjs --domain 你的域
 想全自动：给仓库配 Secrets `CF_API_TOKEN` 与 Variables `CF_ACCOUNT_ID / CF_ZONE_ID / CF_WORKER_NAME / CF_DOMAIN`，
 之后 push 就会自动更新线上站点（没配则跳过该步，只构建）。
 
+### 改播放链路的自测(强烈建议先跑)
+
+```bash
+node web/selftest.mjs      # 桥/Service Worker 的代理不变量, 全绿才算改对
+```
+
+它钉死的是**被改坏过好几次**的不变量: 已经是代理地址的 URL 不许再包一层(否则 Worker 会
+fetch 自己 → Cloudflare 522)、直播地址走 `/f` 分片走 `/p`、SW 改写清单时不动已是代理的行、
+网页端直播列表只留 https 频道。CI 里也跑了这一步。
+
 ## 四、本地预览
 
 ```bash
