@@ -479,6 +479,23 @@ function switchSrc(k){                     // 手动换源 = 用户认为这条�
   srcIdx = k; renderDetail();
 }
 function renderDetail(){
+  // 豆瓣在这套界面里只做三件事: **评分 / 海报 / 剧情**(看剧仍然走聚合源)。
+  // 源里没海报、没简介时, 就用豆瓣的补上(网页端海报要走代理: 豆瓣图床按 Referer 放行)。
+  var _db = null;
+  try { _db = doubanOf((srcList && srcList[srcIdx] && srcList[srcIdx].name) || (curItem && curItem.name) || ''); } catch(e) { _db = null; }
+  var _dPic = '', _dIntro = '';
+  try {
+    var _it0 = srcList && srcList[srcIdx];
+    if (_db) {
+      _dIntro = _db.intro || '';
+      if (!_it0 || !_it0.pic) {
+        if (WEB && _db.img && PK.imgVia) _dPic = PK.imgVia(_db.img);
+        else _dPic = _db.img || '';
+      }
+    }
+    if (!_dPic && _it0) _dPic = _it0.pic || '';
+    if (!_dPic && _db && _db.img) _dPic = WEB && PK.imgVia ? PK.imgVia(_db.img) : (_db.img || '');
+  } catch(e) {}
   // 这里**不能**清 failedSrc: 自动换源就是靠 renderDetail 切到下一个源的, 一清就等于
   // "刚标记失败的源"立刻被忘记 -> 会来回跳、或者误判"没有备用源"。清点挪到真正换剧的地方(见 onVodDetail)
   var it = srcList[srcIdx];
@@ -499,7 +516,7 @@ function renderDetail(){
     + '<button onclick="playEp(0)">&blacktriangleright; 播放</button></div>'
     + tabs
     + '<div class="dhead">'
-    + '<img referrerpolicy="no-referrer" src="' + esc(it.pic) + '" />'
+    + '<img referrerpolicy="no-referrer" data-pic="' + esc(it.pic || '') + '" src="' + esc(_dPic) + '" />'
     + '<div class="info"><h2>' + esc(it.name) + '</h2>'
     + '<div class="meta">'
     + (it.score ? '<span class="tag">评分 ' + esc(it.score) + '</span>' : '')
@@ -515,7 +532,7 @@ function renderDetail(){
         ? ('<div id="dbrow" class="dbrow">豆瓣 ' + esc(doubanOf(it.name).rating) + (doubanOf(it.name).genres ? (' · ' + esc(doubanOf(it.name).genres)) : '') + '</div>')
         : '<div id="dbrow" class="dbrow"></div>')
     + '</div></div>'
-    + (it.content ? ('<div class="desc">' + esc(it.content) + '</div>') : '')
+    + ((it.content || _dIntro) ? ('<div class="desc">' + esc(it.content || _dIntro) + '</div>') : '')
     + '<div class="sec">选集</div><div class="eps" id="epsBox"></div>';
   document.getElementById('v-detail').innerHTML = h;
   var b = '';
