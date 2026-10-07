@@ -100,6 +100,30 @@ console.log('\n[1b] 桥: webconfig 里 proxy 没填时, 接口/豆瓣榜单仍�
   ok('出口里带的是配置里的令牌(不是写死的 zyweb)', u0.indexOf('t=a7') > 0, u0.slice(0, 90));
 }
 
+/* --------------------- 界面源码: 手势反馈 & 横屏手感(亮度/音量) --------------- */
+console.log('\n[1f] 界面: 亮度/音量手势(横屏手感 + 反馈不被静默吞掉)');
+{
+  const cands = ['../pikachu-dl/android/assets/app.js', 'site/app.js'];
+  let src = '';
+  for (const c of cands) { const f = join(here, c); if (existsSync(f)) { src = readFileSync(f, 'utf8'); break; } }
+  ok('找得到界面脚本 app.js', !!src);
+  // ① 直接操作反馈必须永远显示(静默提示只压例行絮叨)
+  const mk = /var KEEP = \/([^\/]+)\//.exec(src);
+  ok('找得到静默提示的白名单 KEEP', !!mk);
+  if (mk) {
+    const re = new RegExp(mk[1]);
+    for (const t of ['亮度 45%', '音量 45%', '进度 12:34 / 45:00', '已回到 30 秒前', '横屏播放', '倍速 1.5x（只影响影视）']) {
+      ok('KEEP 放行「' + t + '」', re.test(t));
+    }
+    ok('KEEP 仍然压掉例行絮叨「已定位到 10:33」', !re.test('已定位到 10:33'));
+  }
+  // ② 横屏: 不能按播放器高度(横屏只有 ~450px)折算, 否则一滑就顶满
+  ok('亮度按参考高度 refH 折算', /st\.base - dy \/ \(st\.refH/.test(src));
+  ok('音量按参考高度 refH 折算', /st\.baseVol - dy \/ \(st\.refH/.test(src));
+  ok('左右半屏按"相对播放器左边"判定(不是 viewport clientX)', /st\.lx < st\.w \/ 2/.test(src));
+  ok('refH 的定义在 touchstart 里(竖屏=屏高, 横屏≈2 倍高)', /refH: Math\.max\(rc\.height/.test(src));
+}
+
 /* --------------------- 界面源码: 每个页面都必须能被 show() 切到(整屏空白的根因) */
 console.log('\n[1e] 界面: show() 的页面清单不许漏掉任何一个 section');
 {

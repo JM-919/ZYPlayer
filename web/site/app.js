@@ -2009,9 +2009,17 @@ function fmt(s){
     var t = e.touches[0];
     touchDown = true;
     readLevels();
-    st = { x: t.clientX, y: t.clientY, time: v.currentTime || 0, dur: v.duration || 0,
-           w: player.clientWidth || 1, h: player.clientHeight || 1, mode: null,
-           base: 0, baseVol: gVol };
+    // 起点要记"手指相对播放器左边的位置"与"参考高度", 不能只看 clientX/clientWidth:
+    //   · 左/右半屏 = 亮度/音量: 用相对播放器左边缘的坐标才对(分屏/带刘海/有内边距时 clientX 会偏);
+    //   · 参考高度 refH: **横屏的病根** —— 横屏时播放器只有 ~450px 高, 若按"整屏高 = 0→100%",
+    //     半根手指就能把亮度从 0 拉到满(实测 180px 就从 7% 冲到 100%, 屏幕刺眼)。
+    //     所以取 max(高, min(宽, 高×2)): 竖屏≈屏高(不变), 横屏≈竖屏那种行程感, 两个方向手感一致。
+    var rc = { left: 0, width: player.clientWidth || 1, height: player.clientHeight || 1 };
+    try { var rb = player.getBoundingClientRect(); if (rb && rb.width > 0) rc = { left: rb.left, width: rb.width, height: rb.height }; } catch (er) {}
+    st = { x: t.clientX, y: t.clientY, lx: t.clientX - rc.left, time: v.currentTime || 0, dur: v.duration || 0,
+           w: rc.width || 1, h: rc.height || 1,
+           refH: Math.max(rc.height || 1, Math.min(rc.width || 1, (rc.height || 1) * 2)),
+           mode: null, base: 0, baseVol: gVol };
     moved = false;
   }, PASSIVE ? { passive: true } : false);
   player.addEventListener('touchmove', function(e){
@@ -2028,7 +2036,7 @@ function fmt(s){
       var ax = Math.abs(dx), ay = Math.abs(dy);
       if (ax < 28 && ay < 28) return;
       if (ax >= 28 && ax >= ay * 1.6) { st.mode = 'seek'; if (nextTimer) cancelAutoNext(true); }
-      else if (ay >= 28 && ay >= ax * 1.6) st.mode = (st.x < st.w / 2 ? 'bright' : 'vol');
+      else if (ay >= 28 && ay >= ax * 1.6) st.mode = (st.lx < st.w / 2 ? 'bright' : 'vol');
       else return;
       st.dead = (st.mode === 'seek') ? 18 : 14;   // 死区: 起手头 18px 不动进度, 避免一碰就跳
     }
@@ -2053,13 +2061,13 @@ function fmt(s){
       } catch(e) {}
     } else if (st.mode === 'bright') {
       if (st.base <= 0) st.base = gBright;          // 记一次起点, 之后按位移算
-      var b = Math.max(0.02, Math.min(1, st.base - dy / st.h));
+      var b = Math.max(0.02, Math.min(1, st.base - dy / (st.refH || st.h)));
       gBright = b;
       try { PK.brightness(b); } catch(err){}
       showGest('亮度 ' + Math.round(b * 100) + '%');
     } else if (st.mode === 'vol') {
       if (st.baseVol < 0) st.baseVol = gVol;
-      var nv = Math.max(0, Math.min(1, st.baseVol - dy / st.h));
+      var nv = Math.max(0, Math.min(1, st.baseVol - dy / (st.refH || st.h)));
       var real = -1;
       try { real = PK.volume(nv); } catch(err){ real = -1; }
       // 显示用"系统真认了多少"(有些机器音量档位粗, 比如 15 档), 但**基准不能跟着回写** ——
@@ -4166,7 +4174,10 @@ function applyWebMode(){
   //    设置里可以关掉这个开关(关掉后一切照旧, 一行提示都不省)。
   try {
     // 默认值已经由 applyWebPsDefaults() 在 psLoad() 之后设好了(见 initPlayerSettings), 这里只管"压提示"
-    var KEEP = /(失败|不通|播不动|错误|异常|超时|不支持|无法|没|403|404|5\d\d|开声音|静音|解锁|已锁|锁定|试了|都放不动)/;
+    // ★ 直接操作反馈(亮度/音量/进度/比例/锁定/静音…)必须**永远显示**: 静默提示只该压掉
+    //   "已定位到/正在探测 N 条线路/按上次记录直接播"这类例行絮叨。这条以前漏了, 结果网页端
+    //   开了静默提示后, 滑亮度/音量时画面上**什么提示都没有** —— 用户会以为"调不动/逻辑坏了"。
+    var KEEP = /(失败|不通|播不动|错误|异常|超时|不支持|无法|没|403|404|5\d\d|开声音|静音|解锁|已锁|锁定|试了|都放不动|亮度|音量|进度|已回到|切回|横屏|竖屏|比例|锁定|倍速|连播|跳过)/;
     var _sg = showGest, _ts = PK.toast;
     showGest = function (t) { try { if (PS.silent && !KEEP.test(String(t))) return; } catch (e) {} _sg(t); };
     PK.toast = function (t) { try { if (PS.silent && !KEEP.test(String(t))) return; } catch (e) {} _ts(t); };
