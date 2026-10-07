@@ -17,7 +17,10 @@
   'use strict';
 
   var AD_LABEL = ['ad','ads','adv','advert','advertise','adservice','adserver','preroll','pre-roll'];
+  // 2026-10 实测补: 用户报"所有源都插棋牌类视频广告" —— 这类广告块目录常带博彩词。
+  // 一律**整段精确相等**才命中("qp" 不会误伤 "qpxyz123" 这种随机目录名)。
   var AD_PATH_SEG = ['ad','ads','adv','advert','advertise','adservice','adserver','preroll','pre-roll',
+    'qp','qipai','qipa','bocai','caipiao','casino','macau','aomen','xinpujing','pujing','leyu',
     'guanggao','gg','adjump','ad-jump','adinsert','ad-insert'];
   var CUE_MAX = 90;                  // 一个 CUE 块最多丢多少行
   var BLOCK_MAX_SEC = 60;            // 短插播块时长上限
@@ -183,10 +186,47 @@
   }
 
   /** 主入口: 返回 { text, dropped, note } */
+  /**
+   * 明流插播块: 正片是加密流时, 把"连续 + 时长 ≤90 秒 + 占比 ≤25%"的 METHOD=NONE 分片段整块删掉。
+   * 只删**分片行**, 标签行(#EXT-X-KEY / #EXT-X-DISCONTINUITY)全部保留 ——
+   * 保留 KEY 的先后顺序, 后面的正片才会用正确的钥匙解密。
+   * 返回: 要删的行下标集合(没有就返回 null)。
+   */
+  function byNoneKeyRuns(lines, stats) {
+    var segIdx = [], segKey = [], segDur = [], curKey = null, curDur = 0, anyEnc = false;
+    for (var i = 0; i < lines.length; i++) {
+      var t = lines[i].trim();
+      if (t.indexOf('#EXT-X-KEY') === 0) {
+        curKey = t;
+        if (t.indexOf('METHOD=NONE') < 0) anyEnc = true;      // 有非 NONE 的钥匙 = 加密流
+      } else if (t.indexOf('#EXTINF') === 0) {
+        var c = t.indexOf(':'), e = t.indexOf(',', c + 1);
+        curDur = parseFloat(e < 0 ? t.slice(c + 1) : t.slice(c + 1, e)) || 0;
+      } else if (t && t.charAt(0) !== '#') {
+        segIdx.push(i); segKey.push(curKey || ''); segDur.push(curDur); curDur = 0;
+      }
+    }
+    var total = segIdx.length;
+    if (!anyEnc || total < 8) return null;                    // 整条没加密: 无从区分, 不动
+    var kill = null, i2 = 0;
+    while (i2 < total) {
+      var j = i2;
+      while (j + 1 < total && segKey[j + 1] === segKey[i2]) j++;
+      var k = segKey[i2], len = j - i2 + 1, sum = 0;
+      for (var x = i2; x <= j; x++) sum += segDur[x];
+      if (k && k.indexOf('METHOD=NONE') >= 0 && sum <= 90 && len * 100 / total <= 25) {
+        if (!kill) kill = {};
+        for (var y = i2; y <= j; y++) { kill[segIdx[y]] = 1; stats.nKeyBlk++; }
+      }
+      i2 = j + 1;
+    }
+    return kill;
+  }
+
   function filter(text, base) {
     if (!text) return { text: text, dropped: 0, note: '' };
     var lines = text.split(/\r?\n/);
-    var out = [], stats = { nSeg: 0, nCue: 0, nSub: 0, nImg: 0, nDir: 0, nBlk: 0 };
+    var out = [], stats = { nSeg: 0, nCue: 0, nSub: 0, nImg: 0, nDir: 0, nBlk: 0, nKeyBlk: 0 };
     var inCue = false, cueLines = 0, subGroup = null;
     for (var i = 0; i < lines.length; i++) {
       var line = lines[i], t = line.trim();
@@ -219,14 +259,20 @@
     // ⑥ 短插播块
     var killBlk = byShortBlocks(out, stats);
     if (killBlk) out = out.filter(function (_l, idx) { return !killBlk[idx]; });
+    // ⑥b 钥匙(KEY)短块 —— 与 Java 的 byNoneKeyRuns 同一条规则:
+    //   正片加密(AES-128)时, 把"连续、≤90 秒、占比≤25%"的 METHOD=NONE 分片段整块删掉。
+    //   广告商把广告文件塞进正片目录时(异目录规则看不见), **加密方式**仍会不同 —— 靠这个抓。
+    var killKey = byNoneKeyRuns(out, stats);
+    if (killKey) out = out.filter(function (_l, idx) { return !killKey[idx]; });
 
-    var add = stats.nSeg + stats.nCue + stats.nSub + stats.nImg + stats.nDir + stats.nBlk;
+    var add = stats.nSeg + stats.nCue + stats.nSub + stats.nImg + stats.nDir + stats.nBlk + stats.nKeyBlk;
     lastStats = stats;
     if (!add) return { text: text, dropped: 0, note: '' };
     dropped += add;
     note = '广告过滤: 去掉 ' + stats.nSeg + ' 段广告片 / ' + stats.nCue + ' 处 CUE 广告块 / '
       + stats.nSub + ' 处字幕注入 / ' + stats.nImg + ' 条预览图轨 / ' + stats.nDir + ' 段插入广告(异目录)'
-      + (stats.nBlk ? (' / ' + stats.nBlk + ' 段短插播块') : '');
+      + (stats.nBlk ? (' / ' + stats.nBlk + ' 段短插播块') : '')
+      + (stats.nKeyBlk ? (' / ' + stats.nKeyBlk + ' 段明流插播(钥匙不同)') : '');
     return { text: out.join('\n'), dropped: add, note: note };
   }
 

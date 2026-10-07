@@ -100,6 +100,52 @@ console.log('\n[1b] 桥: webconfig 里 proxy 没填时, 接口/豆瓣榜单仍�
   ok('出口里带的是配置里的令牌(不是写死的 zyweb)', u0.indexOf('t=a7') > 0, u0.slice(0, 90));
 }
 
+/* --------------------- 广告过滤(网页端 JS): 与 Java 同规则的验收 --------------- */
+console.log('\n[1g] 广告过滤: 明流插播块 / 棋牌目录 / 不误杀');
+{
+  const src = readFileSync(join(here, 'adfilter.js'), 'utf8');
+  const sandbox = { console, module: undefined, self: null };
+  sandbox.self = sandbox; sandbox.globalThis = sandbox;
+  const ctx = vm.createContext(sandbox);
+  vm.runInContext(src, ctx, { filename: 'adfilter.js' });
+  const F = sandbox.AdFilterJS;
+  ok('adfilter.js 暴露 AdFilterJS', !!(F && F.filter));
+  const segs = t => t.split('\n').filter(l => l.trim() && l.trim()[0] !== '#').length;
+  const cnt = (t, x) => t.split('\n').filter(l => l.indexOf(x) >= 0).length;
+
+  // ① 同目录 + 无 DISCONTINUITY 的明流插播块(异目录规则看不见的形态)
+  let p1 = '#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI="k"\n';
+  for (let i = 0; i < 12; i++) p1 += '#EXTINF:6,\n/c/' + i + '.ts\n';
+  p1 += '#EXT-X-DISCONTINUITY\n#EXT-X-KEY:METHOD=NONE\n';
+  for (let i = 0; i < 4; i++) p1 += '#EXTINF:5,\n/c/ad' + i + '.ts\n';
+  p1 += '#EXT-X-KEY:METHOD=AES-128,URI="k"\n';
+  for (let i = 0; i < 12; i++) p1 += '#EXTINF:6,\n/c/z' + i + '.ts\n';
+  const r1 = F.filter(p1, 'https://x/c/i.m3u8');
+  ok('明流插播 4 段被清掉', cnt(r1.text, '/c/ad') === 0, r1.note);
+  ok('正片 24 段一段没少', segs(r1.text) === 24, String(segs(r1.text)));
+  ok('KEY 标签保留(正片才解得开)', r1.text.indexOf('#EXT-X-KEY') >= 0);
+
+  // ② 棋牌关键词目录
+  let p2 = '#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI="k"\n';
+  for (let i = 0; i < 12; i++) p2 += '#EXTINF:6,\n/c/' + i + '.ts\n';
+  p2 += '#EXTINF:5,\n/site/qipai/a1.ts\n#EXTINF:5,\n/site/bocai/a2.ts\n';
+  for (let i = 0; i < 12; i++) p2 += '#EXTINF:6,\n/c/x' + i + '.ts\n';
+  const r2 = F.filter(p2, 'https://x/c/i.m3u8');
+  ok('棋牌目录(qipai/bocai)被清掉', cnt(r2.text, 'qipai') === 0 && cnt(r2.text, 'bocai') === 0, r2.note);
+
+  // ③ 负例: 正常流不许动(整条明流 / 明流占多数 / 变长分片+交替 CDN)
+  let p3 = '#EXTM3U\n#EXT-X-KEY:METHOD=NONE\n';
+  for (let i = 0; i < 30; i++) p3 += '#EXTINF:6,\n/nc/' + i + '.ts\n';
+  ok('全明流清单零改动', F.filter(p3, 'https://x/nc/i.m3u8').dropped === 0);
+  let p4 = '#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI="k"\n#EXTINF:6,\n/c/0.ts\n#EXT-X-KEY:METHOD=NONE\n';
+  for (let i = 0; i < 20; i++) p4 += '#EXTINF:6,\n/c/' + i + 'b.ts\n';
+  ok('明流占多数不动手(防误杀)', F.filter(p4, 'https://x/c/i.m3u8').dropped === 0);
+  let p5 = '#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI="k"\n';
+  const hosts = ['/c/', '/c/', '/c/', '/cdn2/'];
+  for (let i = 0; i < 60; i++) p5 += '#EXTINF:' + (i % 3 === 0 ? '1.7' : (i % 3 === 1 ? '3.2' : '6.1')) + ',\n' + hosts[i % 4] + i + '.ts\n';
+  ok('变长分片 + 交替多 CDN 正常流零改动', F.filter(p5, 'https://x/c/i.m3u8').dropped === 0);
+}
+
 /* --------------------- 界面源码: 手势反馈 & 横屏手感(亮度/音量) --------------- */
 console.log('\n[1f] 界面: 亮度/音量手势(横屏手感 + 反馈不被静默吞掉)');
 {
