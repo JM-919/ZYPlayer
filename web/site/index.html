@@ -40,7 +40,13 @@
   /* 白天模式下的按钮/面板文字 —— 用户报"很多字是白色的无法看清":
      .pbtn 本来是给播放器**深色浮层**设计的(白字 + 半透明白底), 用在页面/面板里就是白底白字。
      规则: ① 页面与"面板类"抽屉 → 浅底深字; ② **压在视频上的控制条/浮层 → 保持白字**(否则视频上看不见)。 */
-  html.light .pbtn{color:#111827;
+  /* ⚠ 浅色只给**页面**与**面板类抽屉**里的按钮, 绝不碰播放器控制条(#ptop/#pbot):
+     播放器整屏永远深色, 它的按钮必须保持底样式(白字 + 半透明白底)。
+     一开始写成全局 `html.light .pbtn`, 结果黑播放器上的"返回/投屏/横屏/解析/设置/倍速/连播/跳过/选集"
+     全被套成深字浅底 -> 糊成一片(用户 2026-10-09 又抓了一次)。 */
+  html.light #main .pbtn,
+  html.light #pset .pbtn,html.light #plist .pbtn,html.light #qlist .pbtn,
+  html.light #pvip .pbtn,html.light #pcast .pbtn,html.light #pskip .pbtn{color:#111827;
     background:linear-gradient(180deg, rgba(0,0,0,.075), rgba(0,0,0,.035));
     box-shadow:0 2px 8px rgba(20,30,50,.10), inset 0 1px 0 rgba(255,255,255,.9),
                inset 0 0 0 1px rgba(0,0,0,.06);}

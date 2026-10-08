@@ -22,7 +22,10 @@ html.light{--bg:#f4f6fa;--bg2:rgba(0,0,0,.045);--card:rgba(255,255,255,.86);--li
   html.light textarea,html.light input[type=search],html.light input[type=text],html.light #decKw{
     background:rgba(0,0,0,.04)!important;color:#111827!important;border-color:rgba(0,0,0,.14)!important;}
   
-  html.light .pbtn{color:#111827;
+  
+  html.light #main .pbtn,
+  html.light #pset .pbtn,html.light #plist .pbtn,html.light #qlist .pbtn,
+  html.light #pvip .pbtn,html.light #pcast .pbtn,html.light #pskip .pbtn{color:#111827;
     background:linear-gradient(180deg, rgba(0,0,0,.075), rgba(0,0,0,.035));
     box-shadow:0 2px 8px rgba(20,30,50,.10), inset 0 1px 0 rgba(255,255,255,.9),
                inset 0 0 0 1px rgba(0,0,0,.06);}
