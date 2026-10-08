@@ -644,7 +644,90 @@
     if (el) el.style.filter = Math.abs(webBright - 1) < 0.01 ? '' : 'brightness(' + webBright.toFixed(2) + ')';
   }
 
+  /* ---------------------------------------------------------------- 短剧页(4)
+     源来自 zhoufuweigg/guoapp「红果鉴」的 Go 核心实现, 按本工程的写法重写。
+     已接入: 红果官网(HTML) / 鬼片(RSS) / 韩小圈(模板站); 其余源在列表里标注未接入原因。
+     条目只有 片名/海报/备注(site 与 id 为空) —— 界面点开时复用"按片名聚合搜索"那条既有链路。 */
+  var SUANJU_SRC = [
+    { key: 'hongguo',     name: '红果',     status: '官网 HTML(红果短剧)', on: true },
+    { key: 'guipian',     name: '鬼片',     status: 'RSS 最新 + 站点',      on: true },
+    { key: 'hanxiaoquan', name: '韩小圈',   status: '模板站 /hxq 分类',     on: true },
+    { key: 'qingkong',    name: '青空',     status: '接口 401, 需要鉴权',   on: false },
+    { key: 'huangdou',    name: '黄豆',     status: '需要 AES+HMAC 平台密钥', on: false },
+    { key: 'juguo',       name: '剧果',     status: '需要签名 Cookie',      on: false },
+    { key: 'yeguo',       name: '野果',     status: '需要签名客户端',       on: false },
+    { key: 'diguo',       name: '帝果',     status: '需要 vplayer 签名解析', on: false },
+    { key: 'huangguo',    name: '黄果视频', status: '需要登录会话',         on: false },
+    { key: 'huangguoai',  name: '黄果AI',   status: '需要登录会话',         on: false },
+    { key: 'huangguoold', name: '黄果旧版', status: '需要登录会话',         on: false }
+  ];
+  function suanjuSources() { return JSON.stringify(SUANJU_SRC); }
+  function suanjuSupported(key) {
+    for (var i = 0; i < SUANJU_SRC.length; i++) if (SUANJU_SRC[i].key === key) return SUANJU_SRC[i].on;
+    return false;
+  }
+  function suanjuText(url, referer) {
+    // 站点 HTML/RSS 都不带 CORS 头 -> 只能经站点自身的代理(/f)取
+    return fetch(proxied(url, { referer: referer }), { credentials: 'omit', mode: 'cors' })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); });
+  }
+  function suanjuItem(name, pic, referer, remarks, siteName, id) {
+    return { name: name, pic: pic ? imgVia(pic, referer) : '', remarks: remarks || '', score: '',
+             siteName: siteName, site: '', id: '', eps: [] };
+  }
+  function suanjuHome(key, page, seq) {
+    var pg = Math.max(1, page || 1), jobs;
+    if (key === 'hongguo') {
+      var base = 'https://hongguoduanju.com';
+      jobs = suanjuText(base + '/', base + '/').then(function (html) {
+        var out = [], re = /href="\/detail\?series_id=(\d+)"([\s\S]{0,2600}?)(?:<\/a>|href="\/detail\?series_id=)/g, m, guard = 0;
+        while ((m = re.exec(html)) && out.length < 30 && guard++ < 200) {
+          var block = m[2];
+          var t = /class="pc-scatter-card-title[^"]*"[^>]*>([^<]+)</.exec(block);
+          if (!t) t = /<img[^>]*alt="([^"]{2,})"/.exec(block);      // 列表卡: 剧名只在 alt 里
+          if (!t) continue;
+          var img = /<img[^>]*class="image-[^"]*"[^>]*src="([^"]+)"/.exec(block);
+          var ep = /class="pc-scatter-episode-[^"]*"[^>]*>([^<]*)</.exec(block);
+          out.push(suanjuItem(t[1].trim(), img ? img[1] : '', base + '/', ep ? ep[1].trim() : '', '红果', m[1]));
+        }
+        return out;
+      });
+    } else if (key === 'guipian') {
+      var gb = 'https://guipianwu.com';
+      jobs = suanjuText(gb + '/xml/rss.xml', gb + '/').then(function (xml) {
+        var items = xml.match(/<item>[\s\S]*?<\/item>/g) || [];
+        var skip = (pg - 1) * 30, out = [];
+        for (var i = skip; i < items.length && out.length < 30; i++) {
+          var b = items[i];
+          var t = /<title>\s*(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?\s*<\/title>/.exec(b);
+          var l = /<link>\s*(?:<!\[CDATA\[)?(https?:\/\/[^<\]]+)/.exec(b);
+          if (!t || !t[1]) continue;
+          out.push(suanjuItem(t[1].trim(), '', gb + '/', '', '鬼片', l ? l[1] : ''));
+        }
+        return out;
+      });
+    } else if (key === 'hanxiaoquan') {
+      var hb = 'https://www.jennyhow.com';
+      jobs = suanjuText(hb + '/hxq/1' + (pg > 1 ? ('-' + pg) : '') + '.html', hb + '/').then(function (html) {
+        var out = [], re = /<a href="\/hanxiaoquan\/(\d+)\.html"[^>]*title="([^"]*)"/g, m;
+        while ((m = re.exec(html)) && out.length < 30) {
+          var tail = html.substr(m.index + m[0].length, 1200);
+          var img = /<img[^>]*data-src="([^"]+)"/.exec(tail);
+          var note = /class="module-item-text"[^>]*>([^<]*)</.exec(tail);
+          out.push(suanjuItem(m[2].trim(), img ? img[1] : '', hb + '/', note ? note[1].trim() : '', '韩小圈', m[1]));
+        }
+        return out;
+      });
+    } else {
+      jobs = Promise.resolve([]);
+    }
+    jobs.then(function (items) { call('onSuanju', seq, items); })
+        .catch(function () { call('onSuanju', seq, []); });
+  }
+
   var PK = {
+    suanjuSources: suanjuSources,
+    suanju: suanjuHome,
     // ★ 网页版标记: app.js 与 index.html 是 App / 网页共用的同一份界面,
     //   凡是"只有原生做得到"的东西(投屏 / 解析线路 / 调起外部播放器 / 应用内更新 / 蜘蛛 jar / 下载),
     //   靠这个标记在网页端**连按钮带入口一起去掉**; App 侧没有 PK.web, 行为一个字节不变。

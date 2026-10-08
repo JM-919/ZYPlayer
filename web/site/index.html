@@ -101,6 +101,14 @@
   .eps button.cur{background:var(--grn);color:#07120a;}
   .tag{display:inline-block;font-size:11px;padding:1px 8px;border-radius:99px;background:var(--g1);color:var(--dim);
     margin-right:6px;border:1px solid var(--hair);}
+  /* 短剧页: 源标签行 + 复用首页的海报网格 */
+  #suanjuSrc{display:-webkit-box;display:-webkit-flex;display:flex;-webkit-flex-wrap:wrap;flex-wrap:wrap;gap:6px;margin:0 0 12px;}
+  .sjchip{padding:7px 10px;border-radius:9px;background:var(--g1);color:var(--fg);border:1px solid var(--hair);
+    font-size:12.5px;cursor:pointer;}
+  .sjchip.on{background:var(--grn);color:#07120a;font-weight:600;border-color:transparent;}
+  .sjchip.off{opacity:.42;cursor:default;}
+  #suanjuSrcNote{margin:-6px 0 10px;font-size:12px;color:var(--dim);}
+
   /* ================= 网页端自适应(照静态博客的做法) =================
      参考用户自己的博客(felixdsh2.eu.cc): 文档自然滚动 + 容器限宽(~1080px) +
      流式网格 repeat(auto-fill, minmax(...)) + 断点 560 / 720 / 880 / 1180。
@@ -506,6 +514,7 @@
            详情页的「搜索」按钮进。函数 openSearch() 保留(规范入口: 进搜索页并聚焦输入框)。 -->
       <!-- 分端文案见 app.js applyWebMode(): App 端是「历史」, 网页端是「历史记录」。 -->
       <button class="ghost mini" id="navHist" onclick="openHistory()">历史</button>
+      <button class="ghost mini" id="navSuanju" onclick="showSuanju()">短剧</button>
       <button class="ghost mini" onclick="showLive()">直播</button>
       <button class="ghost mini" onclick="showDecrypt()">解密</button>
       <button class="ghost mini" onclick="showUpdate()">更新</button>
@@ -579,6 +588,20 @@
         <button class="ghost mini" onclick="PK.clearDiag();show('v-home')">清空</button>
       </div>
       <div class="titem"><div id="crashText" class="tpath" style="white-space:pre-wrap"></div></div>
+    </section>
+
+    <!-- 短剧: 收拢 guoapp(红果鉴) 的短剧源; 条目只给片名/海报/备注, 点开走按片名聚合搜索 -->
+    <section id="v-suanju" style="display:none">
+      <div class="bar">
+        <button class="ghost mini" onclick="goHome()">&lsaquo; 首页</button>
+        <span class="tag">短剧</span>
+        <div class="grow"></div>
+        <button class="ghost mini" onclick="loadSuanju(1)">刷新</button>
+      </div>
+      <div id="suanjuSrc"></div>
+      <div id="suanjuSrcNote"></div>
+      <div class="grid" id="suanjuGrid"></div>
+      <div id="suanjuMore" onclick="moreSuanju()" style="cursor:pointer">— 点这里加载更多 —</div>
     </section>
 
     <!-- 观看记录管理 -->

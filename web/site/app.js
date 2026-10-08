@@ -7,7 +7,10 @@ function isWeb(){ try { return !!(window.PK && PK.web); } catch(e){ return false
 var curItem = null, curEp = 0, hls = null;
 /* 首页与搜索各自一份数据源：曾共用 lastItems，导致"搜完再回首页点卡片 = 打开搜索结果" */
 var homeItems = [], searchItems = [];
-function listOf(which){ return which === "search" ? searchItems : homeItems; }
+function listOf(which){                                   // 各页面各自的数据数组
+  if (which === "suanju") return suanjuItems;               // 短剧页(条目无 site/id -> 点开按片名搜)
+  return which === "search" ? searchItems : homeItems;
+}
 
 function $(id){ return document.getElementById(id); }
 function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
@@ -36,7 +39,7 @@ function showList(){
       if (out.length) return out;
     }
   } catch (e) {}
-  return ["v-home","v-search","v-detail","v-update","v-live","v-hist","v-crash","v-dec"];
+  return ["v-home","v-search","v-detail","v-update","v-live","v-hist","v-crash","v-dec","v-suanju"];
 }
 function show(v){
   // 播放器是 position:fixed + z-index:50, 切页面时如果不关掉会把整屏盖住
@@ -854,6 +857,71 @@ function clearHistory(){
   renderHistoryFull();
   PK.toast('已清空 ' + n + ' 条观看记录');
 }
+/* ---------- 短剧页: 收拢 guoapp(红果鉴) 的短剧源 ----------
+ * 条目只有片名/海报/备注(site/id 为空) —— 点开时复用 openDetail() 里那条"按片名去聚合搜索"的
+ * 既有链路(和豆瓣首页完全一致), 所以这一页不需要新的详情/播放实现, 也不会动原有逻辑。
+ */
+var suanjuItems = [], suanjuKey = '', suanjuPage = 1, suanjuSeq = 0, suanjuSrcCache = null;
+function suanjuSourcesList(){
+  if (suanjuSrcCache) return suanjuSrcCache;
+  suanjuSrcCache = [];
+  try { suanjuSrcCache = JSON.parse(PK.suanjuSources()) || []; } catch(e) { suanjuSrcCache = []; }
+  return suanjuSrcCache;
+}
+function showSuanju(){
+  show('v-suanju');
+  var list = suanjuSourcesList();
+  if (!suanjuKey) { for (var i = 0; i < list.length; i++) if (list[i].on) { suanjuKey = list[i].key; break; } }
+  fillSuanjuSrc();
+  loadSuanju(1);
+}
+function fillSuanjuSrc(){
+  var box = document.getElementById('suanjuSrc');
+  var note = document.getElementById('suanjuSrcNote');
+  if (!box) return;
+  var list = suanjuSourcesList(), h = '', off = [];
+  for (var i = 0; i < list.length; i++) {
+    var s = list[i];
+    h += '<button type="button" class="sjchip' + (s.key === suanjuKey ? ' on' : '') + (s.on ? '' : ' off') + '"'
+      + ' data-key="' + esc(s.key) + '"' + (s.on ? ' onclick="pickSuanju(this)"' : ' disabled')
+      + ' title="' + esc(s.status || '') + '">' + esc(s.name) + '</button>';
+    if (!s.on) off.push(esc(s.name) + '(' + esc(s.status || '') + ')');
+  }
+  box.innerHTML = h;
+  if (note) note.textContent = off.length ? ('未接入: ' + off.join(' · ')) : '';
+}
+function pickSuanju(el){
+  var k = el && el.getAttribute('data-key');
+  if (!k) return;
+  suanjuKey = k;
+  fillSuanjuSrc();
+  loadSuanju(1);
+}
+function loadSuanju(force){
+  if (!suanjuKey) return;
+  if (force) { suanjuPage = 1; suanjuItems = []; }
+  var grid = document.getElementById('suanjuGrid'), more = document.getElementById('suanjuMore');
+  if (grid && force) grid.innerHTML = skeleton(6);
+  if (more) more.textContent = '加载中…';
+  var seq = ++suanjuSeq;
+  try { PK.suanju(suanjuKey, suanjuPage, seq); }
+  catch (e) { if (more) more.textContent = '这一版没接短剧接口'; }
+}
+function moreSuanju(){ suanjuPage++; loadSuanju(false); }
+function onSuanju(seq, items){
+  if (seq !== suanjuSeq) return;                 // 迟到的旧响应丢掉(与首页同一套 seq 约定)
+  items = items || [];
+  suanjuItems = (suanjuPage === 1) ? items : suanjuItems.concat(items);
+  var grid = document.getElementById('suanjuGrid'), more = document.getElementById('suanjuMore');
+  if (grid) renderGrid(grid, suanjuItems, 0, 'suanju');
+  if (more) {
+    var src = suanjuSourcesList().filter(function (x) { return x.key === suanjuKey; })[0] || {};
+    more.textContent = suanjuItems.length
+      ? ('— ' + (src.name || suanjuKey) + ' · 共 ' + suanjuItems.length + ' 部, 点这里加载更多 —')
+      : ('— ' + (src.name || suanjuKey) + ' 暂时没有取到片单' + (src.status ? ('(' + src.status + ')') : '') + ' —');
+  }
+}
+
 /* ---------- 观看记录管理页 ---------- */
 function openHistory(){
   show('v-hist');
