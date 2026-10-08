@@ -352,19 +352,36 @@ function doSearch(){
   var sc = document.getElementById('srcChips');
   if (sc) { sc.innerHTML = ''; sc.style.display = 'none'; }
   allResults = []; curSrcFilter = '';   // 新搜索: 源筛选回到"全部"
+  suSearchSeq++; suSearchPending = 0;   // 作废上一轮的迟到回调
   VOD.search(k);
 }
 
 
+/** 采集源搜完了、还有 N 个蜘蛛源在搜(它们慢是正常的: 要下/加载 jar 再跑它自己的请求) */
+function onVodSearchPending(seq, n){
+  if (seq && seq !== suSearchSeq) return;
+  suSearchPending = n || 0;
+  var tip = document.getElementById('searchTip');
+  if (tip) tip.textContent = (lastSearchWord ? ('「' + lastSearchWord + '」· ') : '') + '采集源已回，还有 '
+    + suSearchPending + ' 个蜘蛛源在搜（首次要加载爬虫 jar，可能要十几秒）…';
+}
+
 /* ---------- 搜索结果: 源标签筛选 (替代之前堆叠分组) ---------- */
 var allResults = [], curSrcFilter = '';
-function onVodSearch(items){
-  allResults = items || [];
+var suSearchSeq = 0, suSearchPending = 0;   // 当前搜索序号 / 还在搜的慢源(蜘蛛)个数
+function onVodSearch(a, b){
+  // 两种回调都认: 网页版是 onVodSearch(items); 安卓侧现在是 onVodSearch(seq, items) —— 带序号,
+  // 这样"两次搜索的迟到回调"不会再互相串台(以前没有序号, 上一次的蜘蛛结果会灌进新搜索里)。
+  var items, seq;
+  if (b === undefined) { items = a || []; seq = 0; }
+  else { seq = a; items = b || []; if (seq && seq !== suSearchSeq) return; }   // 过期响应: 丢
+  allResults = items;
   // 这里**不能**清 curSrcFilter: Java 是"边收边显示", 一次搜索会回调好几次,
   // 每次清一下就把用户刚点的源筛选抹掉了(新搜索开始时才重置, 见 doSearch)
   var tip = document.getElementById('searchTip');
   if (!items.length) {
-    tip.textContent = (lastSearchWord ? ('「' + lastSearchWord + '」没搜到, ') : '') + '换个词或换源试试';
+    tip.textContent = (lastSearchWord ? ('「' + lastSearchWord + '」没搜到, ') : '') + '换个词或换源试试'
+      + (suSearchPending > 0 ? ('（还有 ' + suSearchPending + ' 个蜘蛛源在搜，它们要现场加载爬虫 jar，可能要等十几秒）') : '');
     document.getElementById('searchGrid').innerHTML = '';
     document.getElementById('srcChips').innerHTML = '';
     return;
@@ -375,7 +392,8 @@ function onVodSearch(items){
     if (count[k] === undefined) { count[k] = 0; order.push(k); }
     count[k]++;
   }
-  tip.textContent = (lastSearchWord ? ('「' + lastSearchWord + '」· ') : '') + '找到 ' + items.length + ' 个结果 · 来自 ' + order.length + ' 个源';
+  tip.textContent = (lastSearchWord ? ('「' + lastSearchWord + '」· ') : '') + '找到 ' + items.length + ' 个结果 · 来自 ' + order.length + ' 个源'
+    + (suSearchPending > 0 ? ('（还有 ' + suSearchPending + ' 个蜘蛛源在搜…）') : '');
   buildChips(count, order);
   renderSearch();
 }
