@@ -661,6 +661,15 @@
     { key: 'huangguoai',  name: '黄果AI',   status: '需要登录会话',         on: false },
     { key: 'huangguoold', name: '黄果旧版', status: '需要登录会话',         on: false }
   ];
+  /** 剧名可用吗: 页面里有 SEO/占位文案混在标题位(实测 "XX短剧海报"/"红果短剧logo"), 都剔掉 */
+  function usableDramaName(name) {
+    var t = String(name == null ? '' : name).trim();
+    if (t.length < 2 || t.length > 40) return false;
+    if (/(短剧海报|海报)$/.test(t)) return false;
+    if (t.indexOf('红果短剧') >= 0 || t.toLowerCase().indexOf('logo') >= 0) return false;
+    if (t === '首页' || t === '分类' || t === '榜单' || t === '下载') return false;
+    return true;
+  }
   function suanjuSources() { return JSON.stringify(SUANJU_SRC); }
   function suanjuSupported(key) {
     for (var i = 0; i < SUANJU_SRC.length; i++) if (SUANJU_SRC[i].key === key) return SUANJU_SRC[i].on;
@@ -680,15 +689,18 @@
     if (key === 'hongguo') {
       var base = 'https://hongguoduanju.com';
       jobs = suanjuText(base + '/', base + '/').then(function (html) {
-        var out = [], re = /href="\/detail\?series_id=(\d+)"([\s\S]{0,2600}?)(?:<\/a>|href="\/detail\?series_id=)/g, m, guard = 0;
-        while ((m = re.exec(html)) && out.length < 30 && guard++ < 200) {
+        var out = [], seen = {}, re = /href="\/detail\?series_id=(\d+)"([\s\S]{0,2600}?)(?:<\/a>|href="\/detail\?series_id=)/g, m, guard = 0;
+        while ((m = re.exec(html)) && out.length < 30 && guard++ < 300) {
           var block = m[2];
           var t = /class="pc-scatter-card-title[^"]*"[^>]*>([^<]+)</.exec(block);
           if (!t) t = /<img[^>]*alt="([^"]{2,})"/.exec(block);      // 列表卡: 剧名只在 alt 里
           if (!t) continue;
+          var name = String(t[1]).replace(/\s+/g, ' ').trim();
+          if (!usableDramaName(name) || seen[name]) continue;       // 剔掉 SEO/占位文案与重复
+          seen[name] = 1;
           var img = /<img[^>]*class="image-[^"]*"[^>]*src="([^"]+)"/.exec(block);
           var ep = /class="pc-scatter-episode-[^"]*"[^>]*>([^<]*)</.exec(block);
-          out.push(suanjuItem(t[1].trim(), img ? img[1] : '', base + '/', ep ? ep[1].trim() : '', '红果', m[1]));
+          out.push(suanjuItem(name, img ? img[1] : '', base + '/', ep ? ep[1].trim() : '', '红果', m[1]));
         }
         return out;
       });
