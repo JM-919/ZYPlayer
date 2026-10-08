@@ -101,15 +101,6 @@
   .eps button.cur{background:var(--grn);color:#07120a;}
   .tag{display:inline-block;font-size:11px;padding:1px 8px;border-radius:99px;background:var(--g1);color:var(--dim);
     margin-right:6px;border:1px solid var(--hair);}
-  /* 赞助福利页: 两张收款码并排(窄屏自动换行), 收款码上方是打赏说明 */
-  .sponsornote{margin:2px 0 14px;padding:12px 14px;border-radius:12px;line-height:1.6;font-size:13px;
-    background:var(--g1);border:1px solid var(--hair);color:var(--fg);}
-  .sponsornote b{color:var(--gold);}
-  .sponsorwrap{display:flex;flex-wrap:wrap;gap:14px;}
-  .sponsorcard{flex:0 1 240px;min-width:0;text-align:center;padding:12px;border-radius:14px;
-    background:var(--card);border:1px solid var(--hair);}
-  .spq{display:block;width:100%;max-width:240px;margin:0 auto;border-radius:10px;background:#fff;padding:6px;}
-  .spqcap{margin-top:8px;font-size:13px;color:var(--dim);}
   /* ================= 网页端自适应(照静态博客的做法) =================
      参考用户自己的博客(felixdsh2.eu.cc): 文档自然滚动 + 容器限宽(~1080px) +
      流式网格 repeat(auto-fill, minmax(...)) + 断点 560 / 720 / 880 / 1180。
@@ -513,12 +504,10 @@
     <div id="navScroll">
       <!-- 顶栏「搜索」按钮已按用户要求删除(截图上标的就是它): 搜索页从**主页搜索框回车**或
            详情页的「搜索」按钮进。函数 openSearch() 保留(规范入口: 进搜索页并聚焦输入框)。 -->
-      <!-- 分端文案/位置见 app.js applyWebMode(): App 端是「历史 / 直播 / 解密 / 赞助 / 更新」,
-           网页端把直播·解密·更新删掉, 并把「历史记录」「赞助福利」并排放(维持原样)。 -->
+      <!-- 分端文案见 app.js applyWebMode(): App 端是「历史」, 网页端是「历史记录」。 -->
       <button class="ghost mini" id="navHist" onclick="openHistory()">历史</button>
       <button class="ghost mini" onclick="showLive()">直播</button>
       <button class="ghost mini" onclick="showDecrypt()">解密</button>
-      <button class="ghost mini" id="navSponsor" onclick="openSponsor()">赞助</button>
       <button class="ghost mini" onclick="showUpdate()">更新</button>
     </div>
   </header>
@@ -590,32 +579,6 @@
         <button class="ghost mini" onclick="PK.clearDiag();show('v-home')">清空</button>
       </div>
       <div class="titem"><div id="crashText" class="tpath" style="white-space:pre-wrap"></div></div>
-    </section>
-
-    <!-- 赞助福利: 两张收款码(纯打赏, 与任何功能/内容无关; 二维码上方是必须保留的说明) -->
-    <section id="v-sponsor" style="display:none">
-      <div class="bar">
-        <button class="ghost mini" onclick="goHome()">&lsaquo; 首页</button>
-        <span class="tag">赞助福利</span>
-        <div class="grow"></div>
-      </div>
-      <div class="sponsornote">
-        <b>这是「打赏赞助」，不是购买。</b>下面的收款码仅用于自愿打赏、支持本项目的开发与服务器开销，
-        <b>不涉及任何付费购买</b>：不是充值、不是会员、不是订阅，也<b>不换取</b>任何内容、功能、去广告或服务承诺。
-        本应用与网页版的全部功能始终免费开放，赞助与否、金额多少都不影响你能看什么、能用什么。请量力而行。
-      </div>
-      <!-- 两个打赏码槽位: 图在 assets/sponsor1.* 与 assets/sponsor2.*(png/jpg/jpeg/webp 都认;
-           没有图时自动回落到同名的 .svg 占位图)。要换成别的渠道, 把这里的标签文字改一下即可。 -->
-      <div class="sponsorwrap">
-        <div class="sponsorcard">
-          <img class="spq" src="sponsor1.jpg" alt="打赏收款码 ①" onerror="sponsorQrNext(this)" />
-          <div class="spqcap">微信 · 自愿打赏 ①</div>
-        </div>
-        <div class="sponsorcard">
-          <img class="spq" src="sponsor2.jpg" alt="打赏收款码 ②" onerror="sponsorQrNext(this)" />
-          <div class="spqcap">微信 · 自愿打赏 ②</div>
-        </div>
-      </div>
     </section>
 
     <!-- 观看记录管理 -->

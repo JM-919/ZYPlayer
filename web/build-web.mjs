@@ -24,12 +24,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(here, '..');
 const dist = join(here, 'dist');
 
-const SPA_FILES = ['index.html', 'app.js', 'hls.min.js', 'legacy.css',
-                  // 赞助页的两张收款码: 占位图是 svg; 站点所有者把真实收款码存成同名 .png 即自动替换
-                  'sponsor1.svg', 'sponsor2.svg'];
-// 用户自己放的真实收款码(可选, 有就一起带上; 前端 <img> 优先 png, 失败才回落到 svg 占位图)
-const SPA_OPTIONAL = ['sponsor1.jpg', 'sponsor2.jpg', 'sponsor1.png', 'sponsor2.png',
-                      'sponsor1.jpeg', 'sponsor2.jpeg', 'sponsor1.webp', 'sponsor2.webp'];
+const SPA_FILES = ['index.html', 'app.js', 'hls.min.js', 'legacy.css'];
 const androidAssets = join(rootDir, 'pikachu-dl', 'android', 'assets');
 const siteDir = join(here, 'site');
 
@@ -38,7 +33,7 @@ if (existsSync(androidAssets)) {
   assets = androidAssets;
   // 本地改完界面顺手把仓库里那份对齐(内容一样就不动, 免得每次构建都改 mtime)
   mkdirSync(siteDir, { recursive: true });
-  for (const f of SPA_FILES.concat(SPA_OPTIONAL)) {
+  for (const f of SPA_FILES) {
     const src = join(androidAssets, f), dst = join(siteDir, f);
     if (!existsSync(src)) continue;
     const a = readFileSync(src), b = existsSync(dst) ? readFileSync(dst) : null;
@@ -54,7 +49,7 @@ if (existsSync(androidAssets)) {
 
 rmSync(dist, { recursive: true, force: true });
 mkdirSync(dist, { recursive: true });
-for (const f of SPA_FILES.concat(SPA_OPTIONAL)) {
+for (const f of SPA_FILES) {
   if (existsSync(join(assets, f))) cpSync(join(assets, f), join(dist, f));
 }
 ['bridge.js', 'sw.js', 'adfilter.js'].forEach(f => cpSync(join(here, f), join(dist, f)));

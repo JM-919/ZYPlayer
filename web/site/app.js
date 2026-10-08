@@ -23,7 +23,7 @@ function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,
 function jsa(v){ return esc(JSON.stringify(String(v==null?"":v))); }
 /**
  * 当前所有页面(section)的 id —— **从 DOM 里现扫**, 不再写死一份白名单。
- * 血泪教训: 以前 show() 里写死了 ["v-home","v-search",…,"v-dec"], 新加的页面(赞助福利 v-sponsor)
+ * 血泪教训: 以前 show() 里写死了 ["v-home","v-search",…,"v-dec"], 新加的页面
  * 忘了加进去, 结果点进去 = 把所有页面都隐藏、新的那个又没被显示 → **整屏空白**,
  * 用户看到的就是"两端都没有免责声明和赞赏码"。以后再加页面只管写 HTML, 这里自动带上。
  */
@@ -36,7 +36,7 @@ function showList(){
       if (out.length) return out;
     }
   } catch (e) {}
-  return ["v-home","v-search","v-detail","v-update","v-live","v-hist","v-crash","v-dec","v-sponsor"];
+  return ["v-home","v-search","v-detail","v-update","v-live","v-hist","v-crash","v-dec"];
 }
 function show(v){
   // 播放器是 position:fixed + z-index:50, 切页面时如果不关掉会把整屏盖住
@@ -854,26 +854,6 @@ function clearHistory(){
   renderHistoryFull();
   PK.toast('已清空 ' + n + ' 条观看记录');
 }
-/* ---------- 赞助福利页(纯打赏, 见 index.html 里那段必须保留的说明) ---------- */
-function openSponsor(){
-  show('v-sponsor');
-}
-/**
- * 收款码取图: 依次试 jpg → png → jpeg → webp → svg(占位图)。
- * 站点所有者只要把图存成 sponsor1.* / sponsor2.* 丢进 assets 目录就行,
- * 不用管后缀、也不用改代码 —— <img> 加载失败时本函数换下一个候选, 最后一定落到 svg 占位图。
- */
-function sponsorQrNext(img){
-  try {
-    var src = String((img && img.getAttribute('src')) || '');
-    var base = src.indexOf('sponsor2') >= 0 ? 'sponsor2' : 'sponsor1';
-    var list = ['jpg', 'png', 'jpeg', 'webp', 'svg'];
-    var n = parseInt(img.getAttribute('data-i') || '0', 10) + 1;
-    img.setAttribute('data-i', String(n));
-    if (n < list.length) img.src = base + '.' + list[n];
-  } catch (e) {}
-}
-
 /* ---------- 观看记录管理页 ---------- */
 function openHistory(){
   show('v-hist');
@@ -4141,15 +4121,10 @@ function applyWebMode(){
     for (var i = 0; i < nav.length; i++) if (/更新|解密/.test(nav[i].textContent || '')) drop(nav[i]);
   } catch(e){}
   try { var vd = $('v-dec'); if (vd) vd.innerHTML = ''; } catch(e){}   // 解密页在网页端没意义(解出来的源多靠蜘蛛/嗅探)
-  // ①b 顶栏入口的**分端差异**(用户点名):
-  //     App   : 「历史」「赞助」, 赞助夹在 解密 与 更新 中间(HTML 里的顺序就是最终顺序)
-  //     网页端: 直播/解密/更新 上面已经删掉, 只剩两个按钮, 文案用完整词「历史记录」「赞助福利」,
-  //             并且并排放在一起 —— 维持用户认可的那个样子
+  // ①b 顶栏入口的**分端差异**: App 端是「历史」, 网页端用完整词「历史记录」
   try {
-    var bH = $('navHist'), bS = $('navSponsor');
+    var bH = $('navHist');
     if (bH) bH.textContent = '历史记录';
-    if (bS) bS.textContent = '赞助福利';
-    if (bH && bS && bH.parentNode && bH.parentNode === bS.parentNode) bH.parentNode.insertBefore(bS, bH.nextSibling);
   } catch(e){}
   // 设置抽屉里"用其它播放器打开这条线路"(网页版没有第二播放器可调)
   try {
