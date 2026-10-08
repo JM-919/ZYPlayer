@@ -42,6 +42,16 @@ html.light{--bg:#f4f6fa;--bg2:rgba(0,0,0,.045);--card:rgba(255,255,255,.86);--li
   html.light .eps button.cur{background:linear-gradient(180deg,#3ddc7f,#1fa855);color:#04120a;}
   html.light .eps button:active{background:rgba(0,0,0,.10);}
   
+  html.light .srcrow{background:rgba(0,0,0,.035);}
+  html.light .srcrow .sinfo{color:#1f2937;}
+  html.light .srcrow .sapi{color:#4b5563;}
+  html.light .srcrow .sbad{color:#0f7a45;}
+  html.light .desc{color:#374151;}
+  html.light #load{color:#4b5563;}
+  html.light .it .tag{color:#4b5563;}
+  html.light .pw{color:#374151;}
+  html.light .hint{color:#4b5563;}
+  
   html.light #player,html.light #webvip{background:#000;}
   html.light #player #ptop,html.light #player #pbot{background:linear-gradient(180deg,rgba(0,0,0,.82),transparent);}
   *{-webkit-box-sizing:border-box;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
