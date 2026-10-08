@@ -2434,7 +2434,9 @@ function tryUserSourceSearch(){
   closeSheets();
   show('v-search');
   var k = document.getElementById('kw');
-  if (k) { k.value = '庆余年'; k.focus(); }
+  var kw = decKw();                     // 用用户自己填的测试片名; 没填就不预填假的(以前写死"庆余年")
+  if (k) { k.value = kw; k.placeholder = '输入片名搜一下(你加的源会自动带上)'; k.focus(); }
+  if (!kw) { try { PK.toast('输入片名再搜 —— 也可以先在解密页的"测试片名"里存一个'); } catch(e){} return; }
   doSearch();
 }
 function onSpiderTest(jsonStr){
@@ -2460,8 +2462,10 @@ function spiderTestNow(i){
   var cls = (sp && sp.key) ? String(sp.key).replace(/^csp_/, '') : 'XBPQ';
   var ext = (sp && sp.ext) || '';
   if (!jar) { if (out) out.textContent = '还不知道 jar 地址 —— 先点「解析并加源」让它从配置里读出来'; return; }
-  if (out) out.textContent = '正在下载 jar → 加载 → 跑 homeContent/searchContent…(' + cls + ')';
-  try { VOD.spiderTest(jar, cls, ext, '庆余年'); }
+  var kw = decKw();
+  if (out) out.textContent = '正在下载 jar → 加载 → 跑 homeContent'
+    + (kw ? ('/searchContent("' + kw + '")') : '(没填测试词, 跳过搜索)') + '…(' + cls + ')';
+  try { VOD.spiderTest(jar, cls, ext, decKw()); }
   catch(e){ if (out) out.textContent = '桥不可用: ' + e; }
 }
 /** 蜘蛛站点: 把 spider://源|线路|id 交给 Java 调 playerContent, 换到直链再播 */
@@ -3715,7 +3719,7 @@ function setUrl(u){
 }
 /* ---------- 解密器(与独立解密器 App 共用同一份 Box.analyze) ---------- */
 var decRaw = '', decJson = '';
-function showDecrypt(){ if (isWeb()) return;   // 网页端: 解密出来的源大多靠蜘蛛/嗅探, 没意义
+function showDecrypt(){ if (isWeb()) return; decKwRestore();   // 网页端: 解密出来的源大多靠蜘蛛/嗅探, 没意义
   show('v-dec'); }
 var decLastJson = '';   // 上一次解析结果: 加完源按真实列表重画用
 function decClear(){ var t=document.getElementById('decIn'); if(t) t.value=''; document.getElementById('decOut').innerHTML=''; }
@@ -3723,7 +3727,24 @@ function decPaste(){
   try { var c = VOD.clipText ? VOD.clipText() : ''; if (c) { document.getElementById('decIn').value = c; PK.toast('已粘贴'); } else PK.toast('剪贴板空的'); }
   catch(e){ PK.toast('桥不可用: ' + e); }
 }
+/** 解密页的"测试片名": 加源/探测/蜘蛛自测都用它去真发一次搜索。留空 = 不做关键词搜索(按首页片单验活)。 */
+function decKw(){
+  var el = document.getElementById('decKw');
+  if (el) return (el.value || '').trim();
+  try { return (localStorage.getItem('pk_deckw') || '').trim(); } catch(e) { return ''; }
+}
+function decKwSave(){
+  var el = document.getElementById('decKw');
+  if (!el) return;
+  try { localStorage.setItem('pk_deckw', (el.value || '').trim()); } catch(e) {}
+}
+function decKwRestore(){
+  var el = document.getElementById('decKw');
+  if (!el || el.value) return;
+  try { el.value = localStorage.getItem('pk_deckw') || ''; } catch(e) {}
+}
 function decGo(){
+  decKwSave();
   var v = (document.getElementById('decIn').value || '').trim();
   if (!v) { PK.toast('先粘地址或配置文本'); return; }
   document.getElementById('decOut').innerHTML = '<div class="pw">正在处理…</div>';
@@ -3851,7 +3872,7 @@ function probeSite(){
   var v = (document.getElementById('decIn').value || '').trim();
   if (!/^https?:\/\//i.test(v)) { PK.toast('先把站点地址粘进输入框'); return; }
   document.getElementById('decOut').innerHTML = '<div class="pw">正在探测常见采集接口路径…</div>';
-  try { VOD.probeSiteUrl(v); } catch(e){ document.getElementById('decOut').innerHTML = '<div class="pw">桥不可用: ' + esc(e) + '</div>'; }
+  try { VOD.probeSiteUrl(v, decKw()); } catch(e){ document.getElementById('decOut').innerHTML = '<div class="pw">桥不可用: ' + esc(e) + '</div>'; }
 }
 function onProbeSite(jsonStr){
   var box = document.getElementById('decOut');
@@ -3884,7 +3905,7 @@ function decAddLiveByUrl(){
 function decCopy(s){ try { VOD.copyText(s || ''); } catch(e){ try { PK.toast('复制失败'); } catch(e2){} } }
 function decAddSite(o){
   decPendingSite = decNorm((o && o.b || '') + (o && o.p || ''));   // 供 onAddSite 判断"是这一条已经有了"
-  try { VOD.addSite(o.k, o.n, o.b, o.p); } catch(e){ PK.toast('桥不可用: ' + e); }
+  try { VOD.addSite(o.k, o.n, o.b, o.p, decKw()); } catch(e){ PK.toast('桥不可用: ' + e); }
 }
 function decAddLive(i){
   var L = scanLives[i];
@@ -3895,7 +3916,7 @@ function decAddLive(i){
 function decAddSpider(i){
   var s = scanSpiders[i];
   if (!s) return;
-  try { VOD.addSpiderSite(s.key, s.name, scanJar || s.jar, s.ext); } catch(e){ PK.toast('桥不可用: ' + e); }
+  try { VOD.addSpiderSite(s.key, s.name, scanJar || s.jar, s.ext, decKw()); } catch(e){ PK.toast('桥不可用: ' + e); }
 }
 /** 上次崩溃的堆栈(Java 启动时推过来)。 */
 function showCrash(t){

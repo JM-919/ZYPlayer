@@ -565,6 +565,14 @@
         <button class="ghost mini" onclick="decAddLiveByUrl()">当直播源加入</button>
         <button class="ghost mini" onclick="showUserSites()">我的源</button>
         <button class="ghost mini" onclick="showUserLiveSources()">我的直播源</button></div>
+      <!-- 测试关键词: 「加源/探测/蜘蛛自测」都拿它去真发一次搜索。以前写死"庆余年" -> 短剧频道永远过不了门槛,
+           所以改成用户自己填; 留空 = 不做关键词搜索, 直接按"首页片单"验活(短剧/分类站这样也能加)。 -->
+      <div class="skiprow" style="margin:6px 0 2px">
+        <input id="decKw" placeholder="测试片名（可留空 = 只按首页片单验活）" onchange="decKwSave()" oninput="decKwSave()"
+          style="flex:1;min-width:150px;background:rgba(255,255,255,.06);color:#eaf2ff;border:1px solid rgba(255,255,255,.14);
+          border-radius:9px;padding:7px 9px;font-size:12.5px" />
+        <span class="dim" style="font-size:12px">加源/探测/自测都用它</span>
+      </div>
       <div class="hint" style="margin:4px 0">支持：明文 · hex+<code>$#口令#$</code>+AES-128-CBC · base64 · hex · 网页内嵌 JSON</div>
       <div id="decTools" style="margin:6px 0"></div>
       <div id="decOut"></div>

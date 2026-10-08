@@ -576,16 +576,25 @@
       });
       return Promise.all(jobs).then(function () { call('onMoreSources', name, found); });
     },
-    addSite: function (key, name, base, path) {
+    addSite: function (key, name, base, path, word) {
       var p = path || DEF_PATH;
-      var probe = apiUrl({ api: base, path: p }, 'ac=videolist&wd=' + enc('庆余年'));
+      // 测试片名由用户填(解密页的"测试片名"); 留空就**不带 wd** —— 短剧/分类站这样才验得活。
+      // (以前写死 wd=庆余年, 于是那些站一律"真测没过")
+      var w = String(word == null ? '' : word).trim();
+      var qs = 'ac=videolist' + (w ? ('&wd=' + enc(w)) : '');
+      var probe = apiUrl({ api: base, path: p }, qs);
       return fetchText(probe, { referer: base + '/' }).then(function (txt) {
+        var j = toJson(txt) || {}, n = (j.list || []).length;
+        if (!n && w) return fetchText(apiUrl({ api: base, path: p }, 'ac=videolist'), { referer: base + '/' })
+          .then(function (t2) { return t2; });
+        return txt;
+      }).then(function (txt) {
         var j = toJson(txt) || {}, n = (j.list || []).length;
         if (!n) { call('onAddSite', name, JSON.stringify({ ok: false, msg: '真测没过(没返回片单), 不加' })); return; }
         var u = userSites();
         u.push({ key: key, name: name, api: base, path: p });
         saveUserSites(u);
-        call('onAddSite', name, JSON.stringify({ ok: true, msg: '已加入(真测 ' + n + ' 条)' }));
+        call('onAddSite', name, JSON.stringify({ ok: true, msg: '已加入(真测 ' + n + ' 条' + (w ? '' : ' · 按首页片单验活') + ')' }));
       }).catch(function (e) {
         call('onAddSite', name, JSON.stringify({ ok: false, msg: '真测失败: ' + e.message }));
       });
@@ -605,20 +614,26 @@
       }).then(function (o) { call('onDecrypt', JSON.stringify(o)); })
         .catch(function (e) { call('onDecrypt', JSON.stringify({ ok: false, url: url, error: '取不到: ' + e.message })); });
     },
-    probeSiteUrl: function (pageUrl) {
+    probeSiteUrl: function (pageUrl, word) {
       var m = /^(https?:\/\/[^\/]+)/.exec(pageUrl);
       var base = m ? m[1] : '';
       var paths = [DEF_PATH, '/api.php/provide/vod/at/json/', '/index.php/api/vod/', '/api.php/provide/vod/from/vod/'];
-      var i = 0, trace = [];
+      var w = String(word == null ? '' : word).trim();
+      // 用户填了测试词: 先用词探一遍, 没探到再**不带词**重探(短剧/分类站搜索里没有那个词, 首页片单是有的)
+      var rounds = w ? [w, ''] : [''];
+      var r = 0, i = 0, trace = [];
       function step() {
-        if (i >= paths.length) { call('onProbeSite', JSON.stringify({ ok: false, base: base, trace: trace.join(' '), msg: '没探到可用的采集接口' })); return; }
-        var p = paths[i++], u = base + p + '?ac=videolist&wd=' + enc('庆余年');
+        if (r >= rounds.length) { call('onProbeSite', JSON.stringify({ ok: false, base: base, trace: trace.join(' '), msg: '没探到可用的采集接口' })); return; }
+        if (i >= paths.length) { r++; i = 0; return step(); }
+        var kw = rounds[r], p = paths[i++];
+        var u = base + p + '?ac=videolist' + (kw ? ('&wd=' + enc(kw)) : '');
         fetchText(u, { referer: base + '/' }).then(function (txt) {
           var j = toJson(txt) || {}, list = j.list || [];
           if (list.length) {
             trace.push(p + '✓');
             call('onProbeSite', JSON.stringify({ ok: true, base: base, path: p, key: base.replace(/[^a-z0-9]/gi, '').slice(0, 10),
-              name: base, n: list.length, sample: (list[0].vod_name || ''), ms: 0, trace: trace.join(' ') }));
+              name: base, n: list.length, sample: (list[0].vod_name || ''), ms: 0, trace: trace.join(' '),
+              msg: '探到采集接口: ' + p + '（真测 ' + list.length + ' 条' + (kw ? '' : ' · 按首页片单验活') + '）' }));
           } else { trace.push(p + '✗'); step(); }
         }).catch(function () { trace.push(p + '✗'); step(); });
       }
