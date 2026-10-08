@@ -66,37 +66,11 @@
   html.light .pclose{background:rgba(0,0,0,.10);color:#111827;}
   html.light .pclose:active{background:rgba(0,0,0,.18);}
   html.light #pmask{background:rgba(255,255,255,.62);}
-  /* 压在画面**正中**的东西(播放按钮/手势提示/下一集提示)保持原样 —— 它们背后是视频, 不是外壳 */
-  html.light #pcenter .pbtn,html.light #pnext .pbtn,html.light #pgbar .pthumb{color:#fff;background:rgba(255,255,255,.14);}
-  html.light #pgest,html.light #pnext .nm,html.light #pnext .tip{color:#fff;}
-
-  /* 白天模式: **播放器外壳也跟着主题**(用户: 播放器这一屏没跟随)。
-     注意区分"外壳"和"画面": 视频本身(以及压在画面正中的播放/手势提示)保持原样,
-     但黑边(letterbox)、上下两条控制条、标题与按钮文字按浅色主题走 —— 否则浅色主题下打开播放器像换了个 App。 */
-  html.light #player{background:#eef1f6;}
-  /* ★ 视频上下那两条"黑边"其实是 <video> 元素自己的黑底(object-fit:contain 留白处露底色):
-     主视频底 #video{background:#000;object-fit:contain} —— 白天模式要把它也换成浅色, 否则黑边还是黑的 */
-  html.light #video{background:#eef1f6;}
-  html.light #ptop{background:linear-gradient(180deg, rgba(255,255,255,.94), rgba(255,255,255,0));}
-  html.light #pbot{background:linear-gradient(0deg, rgba(255,255,255,.94), rgba(255,255,255,0));}
-  html.light #ptitle{color:#111827;}
-  html.light #ptop .pbtn,html.light #pbot .pbtn{color:#111827;background:rgba(0,0,0,.07);
-    box-shadow:0 2px 8px rgba(20,30,50,.10), inset 0 1px 0 rgba(255,255,255,.9);}
-  html.light #pgbar{background:rgba(0,0,0,.16);color:#374151;}          /* 时间文字 */
-  /* 进度条: 轨道/缓存条本来是白色系(+拇指白), 浅底上等于看不见(用户报"进度条对比度太低") */
-  html.light #ptrack::before{background:rgba(0,0,0,.18);}
-  html.light #pbuf{background:linear-gradient(90deg, rgba(0,0,0,.20), rgba(0,0,0,.30));}
-  html.light #pbuf.loading{background:linear-gradient(90deg, rgba(0,0,0,.22), rgba(0,0,0,.40), rgba(0,0,0,.22));}
-  html.light #pthumb{background:#fff;box-shadow:0 0 0 2px rgba(0,0,0,.38), 0 1px 5px rgba(0,0,0,.30);}
-  /* 左下"上一集/播放/下一集"的图标在 SVG 里写死了 fill="#fff" —— 浅底上白图标看不见, 用 CSS 压过去
-     (表现属性优先级最低, 任何 CSS 规则都能盖住它) */
-  html.light #pbot .ic svg path,html.light #pbot .ic svg rect,html.light #pbot .ic svg polygon{
-    fill:#111827;stroke:#111827;}
-  html.light #pbot .t{color:#374151;}          /* 时间 00:28 / 00:50 */
-  html.light #pzap .eps button,html.light #prate{color:#111827;}
-  html.light #prate{background:rgba(0,0,0,.07);}
-  html.light #pload,html.light #ploadtxt{color:#374151;}
-  /* 嗅探/网页解析窗口仍然是深色(里面是别人的播放器页面) */
+  /* 播放器整屏**永远深色**(用户 2026-10-09 明确要求: "还是黑色的柔和优雅, 改回黑色") ——
+     浅色主题只作用于页面与面板(设置/选集/解析等阅读面), 不碰播放器的背景/黑边/控制条/进度条/SVG 图标。
+     别再"顺手"把它改成跟随主题: 试过一次(#player/#video 与上下控制条一起改浅),
+     结果视频自身的黑边与控制条拼在一起很难看, 用户当场要求改回。 */
+  /* 嗅探/网页解析窗口同理(里面是别人的播放器页面) */
   html.light #webvip{background:#000;}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);
