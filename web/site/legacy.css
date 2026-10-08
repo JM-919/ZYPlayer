@@ -22,7 +22,28 @@ html.light{--bg:#f4f6fa;--bg2:rgba(0,0,0,.045);--card:rgba(255,255,255,.86);--li
   html.light textarea,html.light input[type=search],html.light input[type=text],html.light #decKw{
     background:rgba(0,0,0,.04)!important;color:#111827!important;border-color:rgba(0,0,0,.14)!important;}
   
+  html.light .pbtn{color:#111827;
+    background:linear-gradient(180deg, rgba(0,0,0,.075), rgba(0,0,0,.035));
+    box-shadow:0 2px 8px rgba(20,30,50,.10), inset 0 1px 0 rgba(255,255,255,.9),
+               inset 0 0 0 1px rgba(0,0,0,.06);}
+  
+  html.light #ptop .pbtn,html.light #pbot .pbtn,html.light #pcenter .pbtn,
+  html.light #pnext .pbtn,html.light #pskip .pbtn,
+  html.light #ptop,html.light #pbot,html.light #ptitle{color:#fff;}
+  html.light #ptop .pbtn,html.light #pbot .pbtn,html.light #pcenter .pbtn,
+  html.light #pnext .pbtn,html.light #pskip .pbtn{
+    background:rgba(255,255,255,.14);color:#fff;box-shadow:none;}
+  
+  html.light #pset h3,html.light #plist h3,html.light #qlist h3,html.light #pvip h3,
+  html.light #pcast h3,html.light #pset label,html.light #plist label,html.light #pskip label{color:#111827;}
+  html.light #pset .skiprow label,html.light #plist .skiprow label,html.light #pskip .skiprow label{color:#374151;}
+  html.light .qtitle{color:#374151;}
+  html.light .eps button{color:#111827;background:rgba(0,0,0,.05);border-color:rgba(0,0,0,.10);}
+  html.light .eps button.cur{background:linear-gradient(180deg,#3ddc7f,#1fa855);color:#04120a;}
+  html.light .eps button:active{background:rgba(0,0,0,.10);}
+  
   html.light #player,html.light #webvip{background:#000;}
+  html.light #player #ptop,html.light #player #pbot{background:linear-gradient(180deg,rgba(0,0,0,.82),transparent);}
   *{-webkit-box-sizing:border-box;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
   html,body{margin:0;height:100%;background:#07090e;color:#eef3fb;
     font:15px/1.5 -apple-system,"PingFang SC","Noto Sans CJK SC",sans-serif;overflow:hidden;}
