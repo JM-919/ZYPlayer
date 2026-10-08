@@ -67,9 +67,10 @@
   #srcChips .srcbody{display:none;margin-top:8px;max-height:52vh;overflow-y:auto;-webkit-overflow-scrolling:touch;}
   #srcChips.open .srcbody{display:block;}
   
-  #srcChips .srcgrp{margin:10px 0 2px;}
-  #srcChips .srcgrp .lbl{display:block;font-size:12px;color:#93a1b8;margin:0 0 6px 2px;letter-spacing:.02em;}
   #srcChips .srclist{display:-webkit-box;display:-webkit-flex;display:flex;-webkit-flex-wrap:wrap;flex-wrap:wrap;grid-template-columns:1fr 1fr;gap:6px;}
+  
+  #srcChips .drw{margin:6px 0;}
+  #srcChips .drw .drwb{max-height:none;overflow:visible;margin-top:8px;}
   #srcChips .srclist.one{grid-template-columns:1fr;}
   #srcChips .srclist button{display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;-webkit-box-align:center;-webkit-align-items:center;align-items:center;-webkit-box-pack:justify;-webkit-justify-content:space-between;justify-content:space-between;gap:6px;min-width:0;
     background:linear-gradient(180deg, rgba(255,255,255,.095), rgba(255,255,255,.038));color:#eef3fb;border:1px solid rgba(255,255,255,.125);border-radius:10px;padding:7px 10px;

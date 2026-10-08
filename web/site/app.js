@@ -452,14 +452,23 @@ function buildChips(count, order){
     return h;
   }
   var cur = curSrcFilter || '全部';
+  // 两组各自一个抽屉(用户要求): 展开哪一组自己决定, 收起时只占一行
+  var mineHasCur = false, otherHasCur = false;
+  for (var mc = 0; mc < mine.length; mc++) if (mine[mc] === curSrcFilter) mineHasCur = true;
+  for (var oc = 0; oc < other.length; oc++) if (other[oc] === curSrcFilter) otherHasCur = true;
   var ch = '<div class="srchead"><button onclick="toggleSrcPanel()">源：' + esc(cur)
     + ' <span class="cnt">(' + (curSrcFilter ? (count[curSrcFilter] || 0) : allResults.length) + ' 条 / '
     + order.length + ' 个源)</span> ▾</button></div><div class="srcbody">'
-    + '<div class="srcgrp"><div class="srclist one"><button class="' + (curSrcFilter === '' ? 'on' : '')
-    + '" onclick="filterSrc(&quot;&quot;)"><span class="nm">显示全部源</span><span class="n">' + allResults.length + '</span></button></div></div>';
-  if (mine.length) ch += '<div class="srcgrp"><span class="lbl">TVBOX源 · ' + mine.length + ' 个</span><div class="srclist">' + chipsOf(mine) + '</div></div>';
-  ch += '<div class="srcgrp"><span class="lbl">CMS源 · ' + other.length + ' 个</span><div class="srclist">'
-    + (other.length ? chipsOf(other) : '<button disabled style="opacity:.5"><span class="nm">这次没有结果</span></button>') + '</div></div>';
+    + '<div class="srclist one" style="margin-bottom:8px"><button class="' + (curSrcFilter === '' ? 'on' : '')
+    + '" onclick="filterSrc(&quot;&quot;)"><span class="nm">显示全部源</span><span class="n">' + allResults.length + '</span></button></div>';
+  if (mine.length) {
+    ch += drawer('drwSrcMine', '📺 TVBOX源', mine.length + ' 个', '<div class="srclist">' + chipsOf(mine) + '</div>',
+                 mineHasCur || (!otherHasCur && !curSrcFilter));
+  }
+  if (other.length) {
+    ch += drawer('drwSrcCms', '📡 CMS源', other.length + ' 个', '<div class="srclist">' + chipsOf(other) + '</div>',
+                 otherHasCur);
+  }
   ch += '</div>';
   box.innerHTML = ch;
   box.style.display = '';
@@ -473,7 +482,7 @@ function toggleSrcPanel(){
 }
 function filterSrc(k){
   curSrcFilter = k || '';
-  srcPanelOpen = false;          // 选完就收起来(抽屉语义)
+  srcPanelOpen = false;          // 选完就连外层一起收起来(抽屉语义)
   buildChips();
   renderSearch();
 }
@@ -2230,15 +2239,18 @@ function fillQuality(){
       rest.sort(function(a, b){ return (srcList[b].eps || []).length - (srcList[a].eps || []).length; });
       return out.concat(rest);
     };
-    var section = function(list, label){
+    var section = function(list, id, label){
       if (!list.length) return '';
-      var s = '<div class="qtitle" style="margin-top:16px">' + label + ' · ' + list.length + '</div>';
-      var ord = orderIn(list);
-      for (var q2 = 0; q2 < ord.length; q2++) s += lineBtn(ord[q2]);
-      return s;
+      var ord = orderIn(list), body = '';
+      for (var q2 = 0; q2 < ord.length; q2++) body += lineBtn(ord[q2]);
+      // 默认展开**当前正在播的那一组**, 另一组收起 —— 一眼看到自己在哪条线上
+      var hasCur = false;
+      for (var hc = 0; hc < list.length; hc++) if (list[hc] === srcIdx) hasCur = true;
+      // 图标与搜索抽屉统一: TVBOX源=📺(自己加的) / CMS源=📡(内置采集源)
+      return drawer(id, (label === 'TVBOX源' ? '📺 ' : '📡 ') + label, list.length + ' 条', body, hasCur);
     };
     h += '<div class="qtitle" style="margin-top:16px">线路切换（换源）</div>';
-    h += section(mineIdx, 'TVBOX源') + section(otherIdx, 'CMS源');
+    h += section(mineIdx, 'drwQLvMine', 'TVBOX源') + section(otherIdx, 'drwQLvCms', 'CMS源');
     h += '<div class="qtitle" style="margin-top:16px">还没找到别的?</div>';
     h += '<button onclick="requestMoreSources()">再搜一遍其它源</button>';
   } else {

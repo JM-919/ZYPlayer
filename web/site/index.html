@@ -83,9 +83,10 @@
   #srcChips .srcbody{display:none;margin-top:8px;max-height:52vh;overflow-y:auto;-webkit-overflow-scrolling:touch;}
   #srcChips.open .srcbody{display:block;}
   /* 两组(TVBOX源 / CMS源) + 每行两列: 名长的用省略号, 数量右对齐 —— 比一堆参差的圆角标签好扫 */
-  #srcChips .srcgrp{margin:10px 0 2px;}
-  #srcChips .srcgrp .lbl{display:block;font-size:12px;color:var(--dim);margin:0 0 6px 2px;letter-spacing:.02em;}
   #srcChips .srclist{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+  /* 分组抽屉嵌在源筛选里: 展开区不再自己滚(交给外层 .srcbody 滚), 免得套两层滚动 */
+  #srcChips .drw{margin:6px 0;}
+  #srcChips .drw .drwb{max-height:none;overflow:visible;margin-top:8px;}
   #srcChips .srclist.one{grid-template-columns:1fr;}
   #srcChips .srclist button{display:flex;align-items:center;justify-content:space-between;gap:6px;min-width:0;
     background:var(--g1);color:var(--fg);border:1px solid var(--hair);border-radius:10px;padding:7px 10px;
