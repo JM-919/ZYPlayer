@@ -2450,6 +2450,16 @@ function showUserSites(){
     + '加完不用重启，退出设置就能用。</div>'
     + '<button class="pbtn" onclick="tryUserSourceSearch()">搜一部片试试</button>'
     + '<div style="height:6px"></div>';
+  // 蜘蛛源预载进度(打开 App 就静默在跑): 让用户看得见"正在预热/已完成", 并可手动重来一遍
+  try {
+    var warm = JSON.parse(PK.spiderWarm());
+    if (warm && warm.total) {
+      h += '<div class="pw">🕷 蜘蛛源预载：<b>' + warm.done + '/' + warm.total + '</b>'
+        + (warm.running ? '（后台静默进行中…）' : '（已完成，搜索时不用再等加载）')
+        + (warm.note ? ('<br><span class="dim" style="font-size:12px">' + esc(warm.note) + '</span>') : '')
+        + '<br><button class="pbtn" onclick="reWarmSpiders()">重新预载</button></div>';
+    }
+  } catch(e) {}
   for (var i = 0; i < list.length; i++) {
     var keyQ = jsa(list[i].key);
     var isCur = (list[i].key === curSite);
@@ -2467,6 +2477,10 @@ function useUserSite(key){
   try { PK.toast('当前源已切到「' + key + '」'); } catch(e){}
   closeSheets();
   show('v-home');
+}
+function reWarmSpiders(){
+  try { PK.warmSpidersNow(); PK.toast('已在后台重新预载蜘蛛源'); } catch(e){ PK.toast('桥不可用: ' + e); }
+  setTimeout(showUserSites, 1600);
 }
 function tryUserSourceSearch(){
   closeSheets();
