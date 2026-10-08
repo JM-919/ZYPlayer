@@ -2535,7 +2535,7 @@ function showUserSites(){
   var h = intro;
   // 蜘蛛源预载进度(打开 App 就静默在跑): 让用户看得见"正在预热/已完成", 并可手动重来一遍
   try {
-    var warm = JSON.parse(PK.spiderWarm());
+    var warm = JSON.parse(PK.spiderWarm());   // 网页端 bridge 也实现这一个(预载各源分类表)
     if (warm && warm.total) {
       // ★ 显示**真实**状态(用户要求, 不要虚假的):
       //   · 「内存预热」每次启动必做(蜘蛛实例跟进程走), jar 有缓存时不联网, 实测 ~16 秒;
@@ -3876,7 +3876,7 @@ function setUrl(u){
 }
 /* ---------- 解密器(与独立解密器 App 共用同一份 Box.analyze) ---------- */
 var decRaw = '', decJson = '';
-function showDecrypt(){ if (isWeb()) return; decKwRestore();   // 网页端: 解密出来的源大多靠蜘蛛/嗅探, 没意义
+function showDecrypt(){ if (isWeb()) return; decKwRestore();   // 网页端不做解密(用户已确认: 网页端保持原样)
   show('v-dec'); }
 var decLastJson = '';   // 上一次解析结果: 加完源按真实列表重画用
 function decClear(){ var t=document.getElementById('decIn'); if(t) t.value=''; document.getElementById('decOut').innerHTML=''; }
@@ -4131,6 +4131,16 @@ function decBatchShow(){
   if (!row) return;
   var has = (scanSpiders && scanSpiders.length) || (scanApis && scanApis.length);
   row.style.display = has ? '' : 'none';
+  if (isWeb()) {
+    // 网页端没有蜘蛛: 把「全部删除」留着, 「全部加入/全部自测」只对采集接口有意义 —— 有接口才显示
+    try {
+      var bs = row.querySelectorAll('button');
+      for (var i = 0; i < bs.length; i++) {
+        var tx = bs[i].textContent || '';
+        if (tx === '全部加入' || tx === '全部自测') bs[i].style.display = (scanApis && scanApis.length) ? '' : 'none';
+      }
+    } catch(e) {}
+  }
 }
 /** 当前解密结果里"还没加入"的条目(采集接口 + 蜘蛛), 供批处理用 */
 function decPendingJobs(){

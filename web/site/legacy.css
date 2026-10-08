@@ -118,6 +118,13 @@
   .tag{display:inline-block;font-size:11px;padding:1px 8px;border-radius:99px;background:linear-gradient(180deg, rgba(255,255,255,.095), rgba(255,255,255,.038));color:#93a1b8;
     margin-right:6px;border:1px solid rgba(255,255,255,.125);}
   
+  html.web .drwh{cursor:pointer;-webkit-transition:border-color .15s, background .15s;transition:border-color .15s, background .15s;}
+  html.web .drwh:hover{border-color:#3ddc7f;}
+  html.web .drwb{max-height:none;}
+  html.web #srcChips .srcbody{max-height:60vh;}
+  html.web #srcChips .srclist{grid-template-columns:1fr 1fr;}
+
+  
   
   html.web main{padding:14px 16px 56px;}
   html.web #main section{width:100%;max-width:1080px;margin:0 auto;}

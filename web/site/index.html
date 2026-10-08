@@ -134,6 +134,13 @@
   .eps button.cur{background:var(--grn);color:#07120a;}
   .tag{display:inline-block;font-size:11px;padding:1px 8px;border-radius:99px;background:var(--g1);color:var(--dim);
     margin-right:6px;border:1px solid var(--hair);}
+  /* 抽屉在网页端(桌面/宽屏)的观感: 鼠标可点、悬停反馈、展开区更宽松 */
+  html.web .drwh{cursor:pointer;transition:border-color .15s, background .15s;}
+  html.web .drwh:hover{border-color:#3ddc7f;}
+  html.web .drwb{max-height:none;}
+  html.web #srcChips .srcbody{max-height:60vh;}
+  html.web #srcChips .srclist{grid-template-columns:1fr 1fr;}
+
   /* ================= 网页端自适应(照静态博客的做法) =================
      参考用户自己的博客(felixdsh2.eu.cc): 文档自然滚动 + 容器限宽(~1080px) +
      流式网格 repeat(auto-fill, minmax(...)) + 断点 560 / 720 / 880 / 1180。
