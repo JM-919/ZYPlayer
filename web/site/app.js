@@ -4595,7 +4595,11 @@ function onUpdateInfo(jsonStr){
   updInfo = d;
   if (!d.hasUpdate) {
     if (note) note.textContent = '已是最新版本（远端 ' + (d.remoteName || d.remoteCode) + '）';
-    if (body) body.innerHTML = '';
+    // 用户报过"更新介绍没跟上": 以前没有新版本就把内容区清空, 于是**这一版到底改了什么永远看不到**
+    // (装上最新版的人反而最看不到说明)。现在把远端清单里这一版的说明显示出来 —— 版本相同 = 就是本版说明。
+    if (body) body.innerHTML = d.notes
+      ? ('<div class="pw">本版更新说明：' + esc(d.notes) + '</div>')
+      : '';
     return;
   }
   if (note) note.textContent = '发现新版本 ' + (d.remoteName || '')
