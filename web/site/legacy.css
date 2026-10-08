@@ -52,6 +52,10 @@ html.light{--bg:#f4f6fa;--bg2:rgba(0,0,0,.045);--card:rgba(255,255,255,.86);--li
   html.light .pw{color:#374151;}
   html.light .hint{color:#4b5563;}
   
+  html.light .pclose{background:rgba(0,0,0,.10);color:#111827;}
+  html.light .pclose:active{background:rgba(0,0,0,.18);}
+  html.light #pmask{background:rgba(255,255,255,.62);}
+  
   html.light #player,html.light #webvip{background:#000;}
   html.light #player #ptop,html.light #player #pbot{background:linear-gradient(180deg,rgba(0,0,0,.82),transparent);}
   *{-webkit-box-sizing:border-box;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
