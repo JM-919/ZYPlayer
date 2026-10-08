@@ -54,6 +54,8 @@ html.light{--bg:#f4f6fa;--bg2:rgba(0,0,0,.045);--card:rgba(255,255,255,.86);--li
 
   
   html.light #player{background:#eef1f6;}
+  
+  html.light #video{background:#eef1f6;}
   html.light #ptop{background:linear-gradient(180deg, rgba(255,255,255,.94), rgba(255,255,255,0));}
   html.light #pbot{background:linear-gradient(0deg, rgba(255,255,255,.94), rgba(255,255,255,0));}
   html.light #ptitle{color:#111827;}

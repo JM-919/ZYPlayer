@@ -74,6 +74,9 @@
      注意区分"外壳"和"画面": 视频本身(以及压在画面正中的播放/手势提示)保持原样,
      但黑边(letterbox)、上下两条控制条、标题与按钮文字按浅色主题走 —— 否则浅色主题下打开播放器像换了个 App。 */
   html.light #player{background:#eef1f6;}
+  /* ★ 视频上下那两条"黑边"其实是 <video> 元素自己的黑底(object-fit:contain 留白处露底色):
+     主视频底 #video{background:#000;object-fit:contain} —— 白天模式要把它也换成浅色, 否则黑边还是黑的 */
+  html.light #video{background:#eef1f6;}
   html.light #ptop{background:linear-gradient(180deg, rgba(255,255,255,.94), rgba(255,255,255,0));}
   html.light #pbot{background:linear-gradient(0deg, rgba(255,255,255,.94), rgba(255,255,255,0));}
   html.light #ptitle{color:#111827;}
