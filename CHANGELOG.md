@@ -1,4 +1,14 @@
 
+## 2026-10-08 成品包验证: 红果鉴/真果鉴 的解密算法与源码一致
+
+取该仓库 release `app-v0.2.64-71` 的两个 arm64 APK, 从编译进去的 Go 核心(两包核心同名同大小 15,414,576 B)
+里做常量级比对: **X-Gorgon 的 20 字节 key** 与 **v2 响应的 32 字节掩码** 在两个 App 里都各出现 1 次,
+与源码 `provider_hongguo_sign.go` / `decodeHongguoPlaybackResponse` 完全一致; 另有
+`invalid pkcs7 padding`/`spade_a`/`hongguo-cenc`/`AES-128`/`vid_list` 等串一一对应。
+我们 Java 版还用**真实 v2 响应样本**离线解出合法 JSON —— 算法不仅抄对, 而且跑通。
+新版后端接口(`/api/playlet/play` 要 CloudFront 凭证、`/api/hls_key/` 要 Authorization、
+`/api/drama/hls/%s/%d/play.m3u8`)也已记录; 播放出口属作者私有服务, 这是"能不能播"的关键。
+
 ## 2026-10-08 红果播放的下游结论(网页端同样受影响)
 
 红果短剧的「剧集 id / X-Gorgon 签名 / 解析响应 AES 解密 / 内容密钥还原」都已验证并落地(安卓侧
