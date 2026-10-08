@@ -82,7 +82,16 @@
   html.light #ptitle{color:#111827;}
   html.light #ptop .pbtn,html.light #pbot .pbtn{color:#111827;background:rgba(0,0,0,.07);
     box-shadow:0 2px 8px rgba(20,30,50,.10), inset 0 1px 0 rgba(255,255,255,.9);}
-  html.light #pgbar{background:rgba(0,0,0,.16);}
+  html.light #pgbar{background:rgba(0,0,0,.16);color:#374151;}          /* 时间文字 */
+  /* 进度条: 轨道/缓存条本来是白色系(+拇指白), 浅底上等于看不见(用户报"进度条对比度太低") */
+  html.light #ptrack::before{background:rgba(0,0,0,.18);}
+  html.light #pbuf{background:linear-gradient(90deg, rgba(0,0,0,.20), rgba(0,0,0,.30));}
+  html.light #pbuf.loading{background:linear-gradient(90deg, rgba(0,0,0,.22), rgba(0,0,0,.40), rgba(0,0,0,.22));}
+  html.light #pthumb{background:#fff;box-shadow:0 0 0 2px rgba(0,0,0,.38), 0 1px 5px rgba(0,0,0,.30);}
+  /* 左下"上一集/播放/下一集"的图标在 SVG 里写死了 fill="#fff" —— 浅底上白图标看不见, 用 CSS 压过去
+     (表现属性优先级最低, 任何 CSS 规则都能盖住它) */
+  html.light #pbot .ic svg path,html.light #pbot .ic svg rect,html.light #pbot .ic svg polygon{
+    fill:#111827;stroke:#111827;}
   html.light #pbot .t{color:#374151;}          /* 时间 00:28 / 00:50 */
   html.light #pzap .eps button,html.light #prate{color:#111827;}
   html.light #prate{background:rgba(0,0,0,.07);}
