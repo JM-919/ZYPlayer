@@ -88,15 +88,6 @@
   .tag{display:inline-block;font-size:11px;padding:1px 8px;border-radius:99px;background:linear-gradient(180deg, rgba(255,255,255,.095), rgba(255,255,255,.038));color:#93a1b8;
     margin-right:6px;border:1px solid rgba(255,255,255,.125);}
   
-  .sponsornote{margin:2px 0 14px;padding:12px 14px;border-radius:12px;line-height:1.6;font-size:13px;
-    background:linear-gradient(180deg, rgba(255,255,255,.095), rgba(255,255,255,.038));border:1px solid rgba(255,255,255,.125);color:#eef3fb;}
-  .sponsornote b{color:#f5c451;}
-  .sponsorwrap{display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;-webkit-flex-wrap:wrap;flex-wrap:wrap;gap:14px;}
-  .sponsorcard{-webkit-box-flex:0;-webkit-flex:0 1 240px;flex:0 1 240px;min-width:0;text-align:center;padding:12px;border-radius:14px;
-    background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.125);}
-  .spq{display:block;width:100%;max-width:240px;margin:0 auto;border-radius:10px;background:#fff;padding:6px;}
-  .spqcap{margin-top:8px;font-size:13px;color:#93a1b8;}
-  
   
   html.web main{padding:14px 16px 56px;}
   html.web #main section{width:100%;max-width:1080px;margin:0 auto;}
