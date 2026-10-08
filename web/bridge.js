@@ -651,6 +651,106 @@
   var webBright = 1;                                   // 1 = 原样(和 App 的"系统亮度百分比"不同, 这里只调画面)
   function videoEl() { try { return root.document.getElementById('video'); } catch (e) { return null; } }
   function playerEl() { try { return root.document.getElementById('player'); } catch (e) { return null; } }
+
+  /* ================= 全屏 / 横屏 / 竖屏: 网页端的"退路"都在这几个函数里 =================
+     实测背景(2026-10-09, 用户手机上默认浏览器 Via / 各家 WebView 内核):
+       · requestFullscreen 能用(要真手势, 键盘/触摸合成的事件会 "Permissions check failed");
+       · screen.orientation.lock **函数存在, 但一调就 reject**:
+           NotSupportedError: screen.orientation.lock() is not available on this device.
+     老代码三处踩坑, 表现就是用户说的"横屏竖屏全屏都坏了":
+       ① canLockOrientation 只看"函数在不在" -> 按钮留在那, 点了只会进全屏, 画面永远不横过来;
+       ② landscape(true) 先全屏再锁方向, 锁失败被 catch 吞掉 -> 静默失败, 用户看不到任何反馈;
+       ③ 全屏里按"返回"关掉播放器时没退全屏 -> 整屏黑, 只能按系统返回救回来。
+     现在改成两段式:
+       ① 方向锁真锁上了 -> 走系统真横屏(最舒服);
+       ② 锁不了 / 锁了没动 -> 自己上"伪横屏": 播放器内容整体包一层 #pklayer 转 90°, 尺寸换成
+          innerHeight × innerWidth(转完正好铺满视口), 用户把手机横过来就是满屏正的画面。
+          反过来按"竖屏"而手机物理上还横着(锁不了方向, 谁也拧不过传感器) -> 同一层反着转 -90°,
+          画面看起来仍是竖的。手机真转了/真竖回来了 -> 自动撤掉这一层, 绝不跟浏览器打架。
+     只动播放器内部一层, 页面/详情/搜索统统不碰; App 端根本不加载 bridge.js, 一个字节都不变。*/
+  function fsEl() {
+    var d = root.document;
+    return d.fullscreenElement || d.webkitFullscreenElement || d.msFullscreenElement || d.webkitCurrentFullScreenElement || null;
+  }
+  function videoFsOn() { var v = videoEl(); try { return !!(v && v.webkitDisplayingFullscreen); } catch (e) { return false; } }
+  function fsOn() { return !!fsEl() || videoFsOn(); }
+  function reqFs(el) {
+    try {
+      el = el || playerEl() || root.document.documentElement;
+      var f = el.requestFullscreen || el.webkitRequestFullscreen || el.webkitRequestFullScreen || el.msRequestFullscreen;
+      if (f) { var p = f.call(el); if (p && p.catch) p.catch(function () {}); return true; }
+      var v = videoEl();                       // iOS Safari: 元素全屏压根没有, 只有 <video> 能全屏
+      if (v && v.webkitEnterFullscreen) { v.webkitEnterFullscreen(); return true; }
+    } catch (e) {}
+    return false;
+  }
+  function exitFs() {
+    try {
+      var v = videoEl();
+      if (videoFsOn() && v.webkitExitFullscreen) { v.webkitExitFullscreen(); return; }
+      var d = root.document;
+      var f = d.exitFullscreen || d.webkitExitFullscreen || d.msExitFullscreen || d.webkitCancelFullScreen;
+      if (f) { var p = f.call(d); if (p && p.catch) p.catch(function () {}); }
+    } catch (e) {}
+  }
+  function realLand() {
+    try { var so = root.screen && screen.orientation; if (so && so.type) return /landscape/.test(so.type); } catch (e) {}
+    return (root.innerWidth || 0) > (root.innerHeight || 0);
+  }
+  // 只在触摸设备上做伪横屏/伪竖屏: 桌面窗口天生"宽>高", 不做这个判断的话在电脑上点竖屏会把播放器转歪
+  var touchDev = (function () { try { return ('ontouchstart' in root) || (root.navigator && root.navigator.maxTouchPoints > 0); } catch (e) { return false; } })();
+  // landMode = 用户要的模式(1=伪横屏, −1=伪竖屏); landDone = 已经真转上去的模式(pseudoLand 报的是它)。
+  // 两者分开: 转的动作要延后 350ms 做(见 landApply), 那 350ms 里手势换算还不能换轴。
+  var landMode = 0, landDone = 0, landWant = false, landWatchOn = false, landTimer = 0;
+  /** 把 #player 的子节点整体搬进 #pklayer(同一任务里搬完, <video> 不会重载 —— 规范规定移除后
+      到稳定状态时"还在文档里"就不暂停, 重新插入时 networkState 非空也不会重跑选源) */
+  function landLayer() {
+    var pl = playerEl(); if (!pl) return null;
+    var ly = root.document.getElementById('pklayer');
+    if (!ly) {
+      ly = root.document.createElement('div'); ly.id = 'pklayer';
+      while (pl.firstChild) ly.appendChild(pl.firstChild);
+      pl.appendChild(ly);
+    }
+    return ly;
+  }
+  function landUnlayer() {
+    landDone = 0;
+    var pl = playerEl(); if (!pl) return;
+    var ly = root.document.getElementById('pklayer'); if (!ly) return;
+    while (ly.firstChild) pl.insertBefore(ly.firstChild, ly);   // 原顺序放回去
+    try { pl.removeChild(ly); } catch (e) {}
+  }
+  function landFit() {
+    if (!landMode) return;
+    var w = root.innerWidth || 0, h = root.innerHeight || 0;
+    if (!w || !h) return;
+    // 手机/浏览器自己转到位了 -> 立刻撤掉我们这一层(伪横屏等真横, 伪竖屏等真竖)
+    if (landMode > 0 ? (w > h) : (h > w)) { landApply(0); return; }
+    var ly = landLayer(); if (!ly) return;
+    landDone = landMode;
+    var s = ly.style;
+    s.position = 'absolute'; s.left = '50%'; s.top = '50%'; s.right = 'auto'; s.bottom = 'auto';
+    s.width = h + 'px'; s.height = w + 'px'; s.margin = '0'; s.maxWidth = 'none'; s.maxHeight = 'none';
+    s.transform = s.webkitTransform = 'translate(-50%,-50%) rotate(' + (landMode > 0 ? 90 : -90) + 'deg)';
+    s.transformOrigin = s.webkitTransformOrigin = '50% 50%';
+  }
+  function landWatch() {
+    if (landWatchOn) return; landWatchOn = true;
+    var h = function () { if (landMode) setTimeout(landFit, 60); };   // 等浏览器把新尺寸结算完再算
+    try { root.addEventListener('resize', h); root.addEventListener('orientationchange', h); } catch (e) {}
+    try { var so = root.screen && screen.orientation; if (so && so.addEventListener) so.addEventListener('change', h); } catch (e) {}
+  }
+  function landApply(mode) {
+    landMode = touchDev ? (Number(mode) || 0) : 0;
+    if (landTimer) { try { clearTimeout(landTimer); } catch (e) {} landTimer = 0; }
+    if (!landMode) { landUnlayer(); return; }
+    landWatch();
+    // ★ 转的动作要**错开一拍**(350ms)再做: 一次点按在 touchend 之后浏览器还会补一个 click,
+    //   布局若在手底下瞬间转过去, 那一下会砸在"转完正好落在同一坐标的按钮"上 ——
+    //   真机实测点「横屏」顺手点到「返回」, 播放器当场被关掉(用户说的"横屏坏了"里就有这一条)。
+    landTimer = setTimeout(function () { landTimer = 0; if (landMode === mode) landFit(); }, 350);
+  }
   function setWebBright(v) {
     v = Number(v);
     if (!isFinite(v) || v <= 0) v = 1;
@@ -732,47 +832,60 @@
     },
     toast: function (m) { root.PK_toast(m); },
     appVersion: function () { return 'web-' + (CFG.version || 'dev'); },
-    isLandscape: function () {
-      try { if (root.screen && screen.orientation && screen.orientation.type) return /landscape/.test(screen.orientation.type); } catch (e) {}
-      return root.innerWidth > root.innerHeight;
-    },
+    isLandscape: function () { return landMode > 0 || (landMode === 0 && realLand()); },
+    /** 伪横屏/伪竖屏的层开着没有: 1=伪横屏, −1=伪竖屏, 0=没有 —— app.js 的手势换算要看它 */
+    pseudoLand: function () { return landDone; },
     /**
-     * 横屏/竖屏。浏览器里 `screen.orientation.lock()` **只有全屏之后才让调**, 桌面端更是根本不支持,
-     * 所以: 先全屏 -> 再锁方向; 关的时候先解锁 -> 再退全屏。(以前这里只裸调 lock, 没进全屏,
-     * 于是"横屏按钮点了没反应" —— 用户反馈的就是这个。)
+     * 横屏/竖屏。先试系统方向锁(全屏后才让调), 锁不了就自己上"伪横屏"(见上面那段注释);
+     * 关的时候反过来: 撤伪横屏 -> unlock -> 退全屏。
      */
     landscape: function (on) {
-      var el = playerEl() || root.document.documentElement;
-      try {
-        if (on) {
-          if (el.requestFullscreen && !root.document.fullscreenElement) {
-            var pr = el.requestFullscreen(); if (pr && pr.catch) pr.catch(function () {});
+      var pl = playerEl() || root.document.documentElement;
+      if (on) {
+        landWant = true;
+        if (!fsOn()) reqFs(pl);                     // 浏览器只允许"全屏之后"锁方向
+        landWatch();
+        var locking = false;
+        try {
+          var so = root.screen && screen.orientation;
+          if (so && so.lock) {
+            locking = true;                         // 有 API 就等它, 失败/没动都还有兜底
+            var q = so.lock('landscape');
+            if (q && q.catch) q.catch(function () { if (landWant && !realLand()) landApply(1); });
           }
-          if (root.screen && screen.orientation && screen.orientation.lock) {
-            setTimeout(function () {
-              try { var q = screen.orientation.lock('landscape'); if (q && q.catch) q.catch(function () {}); } catch (e) {}
-            }, 150);
-          }
-        } else {
-          try { if (root.screen && screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch (e) {}
-          if (root.document.fullscreenElement && root.document.exitFullscreen) {
-            var pr2 = root.document.exitFullscreen(); if (pr2 && pr2.catch) pr2.catch(function () {});
-          }
-        }
-      } catch (e) {}
+        } catch (e) {}
+        // 没这 API: 立刻伪横屏; 有 API 但 900ms 后画面还是竖的(锁"成功"却没转) -> 也兜上
+        if (!locking) { if (!realLand()) landApply(1); }
+        else setTimeout(function () { if (landWant && !landMode && !realLand()) landApply(1); }, 900);
+      } else {
+        landWant = false;
+        try { if (root.screen && screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch (e) {}
+        // 手机物理上还横着、方向又锁不住(谁也拧不过传感器) -> 反着转一层, 画面看起来仍是竖的
+        landApply(realLand() ? -1 : 0);
+        if (fsOn()) exitFs();
+      }
     },
-    /** 能不能真的锁方向(手机浏览器全屏后可以, 桌面端不行) —— app.js 用它决定"横屏"按钮留不留 */
-    canLockOrientation: function () {
-      try { return !!(root.screen && screen.orientation && screen.orientation.lock && ('ontouchstart' in root)); } catch (e) { return false; }
-    },
+    /**
+     * 方向锁"能用"吗 —— app.js 用它决定播放器里的「横屏」按钮留不留。
+     * 判据**不能**是"look 有没有 lock 这个函数": Via / 微信/QQ 内置 / 各家 WebView 里
+     * 它存在却永远 reject(NotSupportedError), 于是按钮在、点了不动(用户报的就是这个)。
+     * 现在没有方向锁也能靠伪横屏横过来, 所以网页端永远保留这个按钮。
+     */
+    canLockOrientation: function () { return true; },
     lockOrientation: function (locked) {
       try {
-        if (root.screen && screen.orientation && screen.orientation.lock && locked) {
-          var q = screen.orientation.lock(screen.orientation.type || 'portrait'); if (q && q.catch) q.catch(function () {});
-        } else if (root.screen && screen.orientation && screen.orientation.unlock) {
-          screen.orientation.unlock();
-        }
+        var so = root.screen && screen.orientation;
+        if (!so || !so.lock) return;
+        if (locked) { var q = so.lock(so.type || 'portrait'); if (q && q.catch) q.catch(function () {}); }
+        else if (so.unlock) so.unlock();
       } catch (e) {}
+    },
+    /** 全屏三件套: app.js 的点按钮/键盘 F/双击画面都走这里(前缀 + iOS 视频兜底都在桥里) */
+    fsOn: fsOn,
+    fsExit: exitFs,
+    toggleFullscreen: function () {
+      if (fsOn()) { exitFs(); return true; }
+      return reqFs(playerEl() || root.document.documentElement);
     },
     playerOpen: function () {},
     exit: function () { try { history.back(); } catch (e) {} },

@@ -1,3 +1,36 @@
+## 2026-10-09 修复: 横屏 / 竖屏 / 全屏全坏了(方向锁靠不住 → 伪横屏 + 关播放器退全屏)
+
+用户报「网页版的横屏竖屏全屏都坏了」。在**真机上**（手机上默认浏览器 Via，WebView 内核）
+把三条链路的真实行为都抓住了，三个根因：
+
+1. **`screen.orientation.lock()` 函数存在, 但一调就 reject**
+   `NotSupportedError: screen.orientation.lock() is not available on this device.`
+   老代码三处踩在这一点上：`canLockOrientation()` 只判断"函数在不在" → 按钮留着但白点；
+   `landscape(true)` 全屏后调 lock，失败被 `catch` 吞掉 → 静默失败，画面永远不横过来。
+   **修法**：锁得上就走系统真横屏；锁不上/锁了没动就**自己转**——播放器内容整体包一层
+   `#pklayer`，尺寸换成 `innerHeight × innerWidth`（转完正好铺满视口）再 `rotate(90deg)`，
+   用户把手机横过来就是满屏正的画面。手机真转了或窗口本来就横着 → 自动撤掉那一层，绝不跟浏览器打架。
+   按「竖屏」而手机物理上还横着（锁不住方向时谁也拧不过传感器）→ 同一层反着转 −90°（伪竖屏）。
+2. **点「横屏」会顺手点到「返回」把播放器关掉**。旋转在手底下瞬间完成时，一次点按在
+   `touchend` 之后浏览器补发的那个 click 会砸在"转完正好落在同一坐标的按钮"上（真机日志实锤）。
+   **修法**：转的动作错开一拍（350ms）再做，`landMode`（要的模式）与 `landDone`（已转上去的模式）
+   分开记账，这 350ms 里手势换算不换轴。
+3. **全屏里按「返回」→ 整屏黑**。`closePlayer()` 只把 `#player` 设成 `display:none`，
+   浏览器还停在全屏态，于是屏幕上什么都没有，只能按系统返回键救回来。
+   **修法**：关播放器时一并 `PK.fsExit()` + 撤伪横屏，并顺手重画全屏按钮文案。
+
+顺带把全屏本身也补牢：状态判定吃 `fullscreenElement / webkitFullscreenElement / ms… /
+webkitCurrentFullScreenElement` 与 iOS 的 `video.webkitDisplayingFullscreen`；请求有全部前缀兜底，
+iOS 上退回 `<video>.webkitEnterFullscreen`；**没有 API 时如实返回 false**（不再装作成功）。
+伪横屏下的手势也做了坐标换算（`rotate(±90deg)`: 画面 x=±屏幕 y, 画面 y=∓屏幕 x），
+否则"上下滑调亮度"会变成"左右滑拖进度"。
+
+* 只动 `web/bridge.js`（网页版专属）+ 共用界面里那几行网页端接线（全部 `PK.x && PK.x(...)` 守卫，
+  安卓端一个字节都不走这条路径）；新增 `[1h]` / `[1i]` 两组自测闸门共 25 项，把上面三条不变量钉死。
+* 真机验证：`横屏` → `pseudoLand=1 fsOn=true vp=453x991 layer w=991px h=453px rotate(90deg)`，
+  截图确认整屏内容旋转、按钮文案变「竖屏」；`竖屏` → 层拆掉、内容原顺序还回 `#player`、播放器不关；
+  `全屏/退出全屏` 正常；旋转后不再误触「返回」。
+
 
 ## 2026-10-09 修复: 浅色按钮规则误伤播放器控制条(限定到页面/面板)
 

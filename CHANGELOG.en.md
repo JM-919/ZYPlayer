@@ -3,6 +3,28 @@
 
 # Changelog (web edition)
 
+### Fix · landscape / portrait / fullscreen were all broken (2026-10-09)
+
+Reported as "the web player's landscape, portrait and fullscreen are all broken". Reproduced on the
+real device (default phone browser Via, WebView engine) and pinned to three causes:
+
+1. **`screen.orientation.lock()` exists but always rejects**
+   (`NotSupportedError: … is not available on this device`). The old code trusted the mere presence of
+   the function, so the button stayed but did nothing, and the rejection was swallowed by a `catch`.
+   **Fix**: use the real lock when it works; otherwise rotate the player content ourselves — the whole
+   `#player` is wrapped in `#pklayer`, sized `innerHeight × innerWidth` and rotated 90°, so holding the
+   phone sideways gives a full-screen upright picture. The layer removes itself as soon as the device
+   really rotates. Pressing "portrait" while the phone is still physically sideways rotates it −90°.
+2. **Tapping "landscape" also hit "back" and closed the player** — the click the browser synthesises
+   after `touchend` landed on whatever button had moved under the same coordinate. **Fix**: the rotation
+   is applied one beat later (350 ms); requested mode and applied mode are tracked separately.
+3. **"Back" inside fullscreen left a black screen** (the player was hidden while the browser stayed in
+   fullscreen). **Fix**: closing the player now exits fullscreen and clears the rotation layer.
+
+Fullscreen itself was hardened too (all vendor prefixes + iOS `video.webkitDisplayingFullscreen`,
+honest `false` when the API is missing), and the player gestures are axis-swapped under the rotated
+layer. New self-test gates `[1h]`/`[1i]` (25 checks) lock all three invariants down.
+
 ### Fix · Douban posters + clarify Douban's role (2026-10-07 late night)
 
 * **Third cause of blank posters**: the Service Worker's fallback upstream used to depend on whether the proxy

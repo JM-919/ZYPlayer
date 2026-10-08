@@ -1974,6 +1974,11 @@ function closePlayer(){
     var _l = document.getElementById('plock'); if (_l) _l.className = '';
     try { PK.lockOrientation(false); } catch(e){}    // 退出播放器时把方向还给系统
   }
+  // 网页端: 关播放器必须一起收掉"全屏"和"伪横屏" —— 否则 #player 被 display:none 藏起来,
+  // 浏览器还停在全屏态, 用户看到的就是**整屏黑**, 只能按系统返回键救回来(用户报的"全屏坏了")。
+  try { if (PK.pseudoLand && PK.pseudoLand()) PK.landscape(false); } catch(e){}
+  try { if (PK.fsExit && PK.fsOn && PK.fsOn()) PK.fsExit(); } catch(e){}
+  try { syncFsBtn(); } catch(e){}
   var _pc = document.getElementById('pcast'); if (_pc) _pc.className = '';
   var _pl = document.getElementById('player'); if (_pl) _pl.className = ('' + _pl.className).replace(/\s*locked/, '');
   try { histTick(); } catch(e){}
@@ -2347,19 +2352,32 @@ function fmt(s){
     //   · 参考高度 refH: **横屏的病根** —— 横屏时播放器只有 ~450px 高, 若按"整屏高 = 0→100%",
     //     半根手指就能把亮度从 0 拉到满(实测 180px 就从 7% 冲到 100%, 屏幕刺眼)。
     //     所以取 max(高, min(宽, 高×2)): 竖屏≈屏高(不变), 横屏≈竖屏那种行程感, 两个方向手感一致。
-    var rc = { left: 0, width: player.clientWidth || 1, height: player.clientHeight || 1 };
-    try { var rb = player.getBoundingClientRect(); if (rb && rb.width > 0) rc = { left: rb.left, width: rb.width, height: rb.height }; } catch (er) {}
-    st = { x: t.clientX, y: t.clientY, lx: t.clientX - rc.left, time: v.currentTime || 0, dur: v.duration || 0,
+    //   · 伪横屏/伪竖屏(网页端自己转的那一层): 画面坐标与屏幕坐标是换轴的, 见下面 sg 分支。
+    var pm = 0;
+    try { pm = (PK.pseudoLand && PK.pseudoLand()) || 0; } catch(e){}
+    var rc = { left: 0, top: 0, width: player.clientWidth || 1, height: player.clientHeight || 1 };
+    try { var rb = player.getBoundingClientRect(); if (rb && rb.width > 0) rc = { left: rb.left, top: rb.top, width: rb.width, height: rb.height }; } catch (er) {}
+    var rtop = rc.top || 0, rbot = rtop + (rc.height || 0);
+    // rotate(±90deg) 下: 画面 x 轴 = ±屏幕 y 轴, 画面 y 轴 = ∓屏幕 x 轴; 画面自己的宽高 = 视口的高宽。
+    // 不换算的话"上下滑调亮度"会变成"左右滑拖进度"(网页端独有的坑)。
+    var sg = pm > 0 ? 1 : (pm < 0 ? -1 : 0);
+    if (sg) rc = { left: 0, top: 0, width: rc.height || 1, height: rc.width || 1 };
+    st = { x: sg ? sg * t.clientY : t.clientX, y: sg ? -sg * t.clientX : t.clientY,
+           lx: sg ? (sg > 0 ? (t.clientY - rtop) : (rbot - t.clientY)) : (t.clientX - rc.left),
+           time: v.currentTime || 0, dur: v.duration || 0,
            w: rc.width || 1, h: rc.height || 1,
            refH: Math.max(rc.height || 1, Math.min(rc.width || 1, (rc.height || 1) * 2)),
-           mode: null, base: 0, baseVol: gVol };
+           sg: sg, mode: null, base: 0, baseVol: gVol };
     moved = false;
   }, PASSIVE ? { passive: true } : false);
   player.addEventListener('touchmove', function(e){
     if (locked) { lockTap = null; return; }   // 划动不算轻点
     if (!st || e.touches.length !== 1) return;
     var t = e.touches[0];
-    var dx = t.clientX - st.x, dy = t.clientY - st.y;
+    // 伪横屏/伪竖屏下把屏幕坐标换算回画面坐标(rotate ±90deg): x=±屏幕y, y=∓屏幕x
+    var mx = t.clientX, my = t.clientY;
+    if (st.sg) { var swp = mx; mx = st.sg * my; my = -st.sg * swp; }
+    var dx = mx - st.x, dy = my - st.y;
     if (!st.mode) {
       // 防误碰(用户: "快进快退经常误碰"):
       //  · 起手位移 <28px 一律不认(以前是 14px, 手指抖一下就开始拖进度);
@@ -4707,10 +4725,25 @@ function syncVolUI(){
   var sl = $('psVol'); if (sl && document.activeElement !== sl) sl.value = pct;
   var mb = $('psMute'); if (mb) mb.textContent = (v && v.muted) ? '取消静音' : '静音';
 }
-function webFsOn(){ return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+/** 全屏状态: 网页端的判定(自家前缀 + iOS 的 video 全屏)统一问桥, App 端走原样 */
+function webFsOn(){
+  try { if (PK.fsOn) return !!PK.fsOn(); } catch(e){}
+  return !!(document.fullscreenElement || document.webkitFullscreenElement);
+}
 function syncFsBtn(){ var b = $('pfs'); if (b) b.textContent = webFsOn() ? '退出全屏' : '全屏'; }
 /** 全屏: 只把播放器区域撑满(不是浏览器的 F11, F11 会连地址栏一起吃掉) */
 function toggleFullscreen(){
+  // 网页端把请求全屏交给桥: 前缀兜底 + iOS 只有 <video> 能全屏 + 失败时不装作成功
+  try {
+    if (PK.toggleFullscreen) {
+      var was = webFsOn();                       // 进/退之前的状态才算得准(全屏是异步生效的)
+      var ok = PK.toggleFullscreen();
+      if (!ok) { try { PK.toast('这个浏览器不支持网页全屏'); } catch(e){} }
+      else showGest(was ? '退出全屏' : '全屏');
+      setTimeout(syncFsBtn, 250);
+      return;
+    }
+  } catch(e){}
   var pl = $('player') || document.documentElement;
   try {
     if (webFsOn()) {
@@ -4910,8 +4943,17 @@ function applyWebMode(){
     var bs = document.querySelectorAll('#pset button');
     for (var j = 0; j < bs.length; j++) if (/其它播放器/.test(bs[j].textContent || '')) drop(bs[j]);
   } catch(e){}
-  // ② "横屏"按钮只在真能锁方向的浏览器上留(手机 Chrome 全屏后可锁; 桌面端锁不了, 点了也是白点)
-  try { if (!(PK.canLockOrientation && PK.canLockOrientation())) drop($('prot')); } catch(e){}
+  // ② "横屏"按钮网页端**永远保留**: 方向锁(screen.orientation.lock)在这些浏览器里存在却永远失败
+  //    (Via/微信内置/各家 WebView 报 NotSupportedError, iOS Safari 压根没这 API), 桥里改用
+  //    "伪横屏"(自己转一层)兜底, 所以不再有"这个浏览器用不了"的说法 —— 以前这里按 canLockOrientation
+  //    把按钮删掉, 用户看到的就是"横屏竖屏都没了/点了不动"。
+  // 横竖屏按钮的文案要跟着真实状态走: 手机物理转了、浏览器自己转了, 都要重画一次
+  try {
+    var rsRot = function(){ syncRotateBtn(); };
+    window.addEventListener('resize', rsRot);
+    window.addEventListener('orientationchange', rsRot);
+    if (window.screen && screen.orientation && screen.orientation.addEventListener) screen.orientation.addEventListener('change', rsRot);
+  } catch(e){}
   // ③ 全屏按钮(PC 看片的刚需, App 里没有这个概念)
   try {
     var top = $('ptop');

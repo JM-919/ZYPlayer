@@ -62,8 +62,15 @@ Search → pick an episode → play.
 * **Shortcuts**: `Space`/`K` play-pause, `←`/`→` seek ±10 s, `↑`/`↓` or wheel = volume,
   `F` fullscreen (player area only, not the browser F11), `M` mute, `Shift`+wheel jumps ±10 s.
 * **Screen too dark/bright**: drag vertically on the video (mapped to a CSS brightness filter).
-* **Phone rotation**: the “landscape” button enters fullscreen first and then locks orientation
-  (browsers only allow locking while fullscreen); desktop browsers cannot lock, so that button is hidden.
+* **Phone rotation**: the “landscape” button goes fullscreen first, then turns the picture sideways.
+  Orientation locking cannot be trusted (in Via and most WebView browsers `screen.orientation.lock()`
+  exists but always throws `NotSupportedError`; iOS Safari has no such API at all), so when the lock
+  fails the player content itself is rotated by 90° — hold the phone sideways and it fills the screen.
+  That layer removes itself the moment the device (or the browser) really rotates. Pressing “portrait”
+  while the phone is still physically sideways rotates the layer by −90° instead. Desktop windows are
+  always wider than tall, so on desktop that button simply means fullscreen / exit fullscreen.
+* **“Back” while fullscreen**: closing the player now also exits fullscreen (previously the screen
+  stayed black and only the system back button could rescue it).
 
 ## Deployment
 
