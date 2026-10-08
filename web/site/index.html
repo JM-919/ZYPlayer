@@ -67,7 +67,20 @@
   .kwprev .it .nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .kwprev .it .tag{font-size:11px;color:var(--dim);flex:none;}
   .kwprev .it.go{color:#7cc4ff;font-weight:600;}
-  .chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;margin-bottom:10px;}
+  /* 源筛选: **下拉抽屉**(用户要求)。
+     收起时只占一行("源：全部 ▾"), 点一下展开列出**全部源**(换行铺开、块内纵向滚动) ——
+     既不用横向滑动藏源, 也不会一屏被源标签占满。 */
+  #srcChips{display:block;margin-bottom:10px;}
+  #srcChips .srchead{display:flex;align-items:center;gap:8px;}
+  #srcChips .srchead button{flex:1;text-align:left;background:var(--g1);color:var(--fg);font-weight:600;
+    padding:8px 12px;border-radius:10px;border:1px solid var(--hair);font-size:13px;}
+  #srcChips .srchead .cnt{color:var(--dim);font-weight:400;font-size:12px;}
+  #srcChips .srcbody{display:none;margin-top:8px;gap:8px;-webkit-flex-wrap:wrap;flex-wrap:wrap;
+    max-height:190px;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+  #srcChips.open .srcbody{display:flex;}
+  .chips button{background:var(--g1);color:var(--dim);font-weight:600;padding:7px 12px;border-radius:99px;flex:none;
+    border:1px solid var(--hair);-webkit-backdrop-filter:var(--blurS);backdrop-filter:var(--blurS);
+    box-shadow:0 4px 14px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.14);}
   .chips button{background:var(--g1);color:var(--dim);font-weight:600;padding:7px 12px;border-radius:99px;flex:none;
     border:1px solid var(--hair);-webkit-backdrop-filter:var(--blurS);backdrop-filter:var(--blurS);
     box-shadow:0 4px 14px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.14);}
@@ -537,7 +550,7 @@
     <!-- 搜索 -->
     <section id="v-search" style="display:none">
       <div class="bar">
-        <input id="kw" type="search" enterkeyhint="search" placeholder="搜片名 / 演员, 如 黄金蜘蛛城" autocomplete="off" oninput="kwPreview()" onkeydown="searchEnter(event)" onkeyup="searchEnter(event)" />
+        <input id="kw" type="search" enterkeyhint="search" placeholder="搜片名 / 演员（两个字也能搜，如 重生）" autocomplete="off" oninput="kwPreview()" onkeydown="searchEnter(event)" onkeyup="searchEnter(event)" />
         <button onclick="doSearch()">搜索</button>
       </div>
       <!-- 搜索预览: 边打字边列出"本页已加载的片子 / 观看记录"里包含这几个字的名字, 点一条直接搜 -->
@@ -568,7 +581,7 @@
       <!-- 测试关键词: 「加源/探测/蜘蛛自测」都拿它去真发一次搜索。以前写死"庆余年" -> 短剧频道永远过不了门槛,
            所以改成用户自己填; 留空 = 不做关键词搜索, 直接按"首页片单"验活(短剧/分类站这样也能加)。 -->
       <div class="skiprow" style="margin:6px 0 2px">
-        <input id="decKw" placeholder="测试片名（可留空 = 只按首页片单验活）" onchange="decKwSave()" oninput="decKwSave()"
+        <input id="decKw" placeholder="测试片名（默认「重生」，短剧/剧集都通用；留空 = 只按首页片单验活）" onchange="decKwSave()" oninput="decKwSave()"
           style="flex:1;min-width:150px;background:rgba(255,255,255,.06);color:#eaf2ff;border:1px solid rgba(255,255,255,.14);
           border-radius:9px;padding:7px 9px;font-size:12.5px" />
         <span class="dim" style="font-size:12px">加源/探测/自测都用它</span>

@@ -53,7 +53,18 @@
   .kwprev .it .nm{-webkit-box-flex:1;-webkit-flex:1;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .kwprev .it .tag{font-size:11px;color:#93a1b8;-webkit-box-flex:0;-webkit-flex:none;flex:none;}
   .kwprev .it.go{color:#7cc4ff;font-weight:600;}
-  .chips{display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;margin-bottom:10px;}
+  
+  #srcChips{display:block;margin-bottom:10px;}
+  #srcChips .srchead{display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;-webkit-box-align:center;-webkit-align-items:center;align-items:center;gap:8px;}
+  #srcChips .srchead button{-webkit-box-flex:1;-webkit-flex:1;flex:1;text-align:left;background:linear-gradient(180deg, rgba(255,255,255,.095), rgba(255,255,255,.038));color:#eef3fb;font-weight:600;
+    padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.125);font-size:13px;}
+  #srcChips .srchead .cnt{color:#93a1b8;font-weight:400;font-size:12px;}
+  #srcChips .srcbody{display:none;margin-top:8px;gap:8px;-webkit-flex-wrap:wrap;-webkit-flex-wrap:wrap;flex-wrap:wrap;
+    max-height:190px;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+  #srcChips.open .srcbody{display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;}
+  .chips button{background:linear-gradient(180deg, rgba(255,255,255,.095), rgba(255,255,255,.038));color:#93a1b8;font-weight:600;padding:7px 12px;border-radius:99px;-webkit-box-flex:0;-webkit-flex:none;flex:none;
+    border:1px solid rgba(255,255,255,.125);-webkit-backdrop-filter:blur(12px) saturate(130%);backdrop-filter:blur(12px) saturate(130%);
+    box-shadow:0 4px 14px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.14);}
   .chips button{background:linear-gradient(180deg, rgba(255,255,255,.095), rgba(255,255,255,.038));color:#93a1b8;font-weight:600;padding:7px 12px;border-radius:99px;-webkit-box-flex:0;-webkit-flex:none;flex:none;
     border:1px solid rgba(255,255,255,.125);-webkit-backdrop-filter:blur(12px) saturate(130%);backdrop-filter:blur(12px) saturate(130%);
     box-shadow:0 4px 14px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.14);}

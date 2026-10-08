@@ -414,15 +414,29 @@ function buildChips(count, order){
   }
   var box = document.getElementById('srcChips');
   if (!box) return;
-  var ch = '<button class="' + (curSrcFilter === '' ? 'on' : '') + '" onclick="filterSrc(&quot;&quot;)">全部 ' + allResults.length + '</button>';
+  // 下拉抽屉: 头一行始终在(点它展开/收起), 全部源在 body 里换行铺开 —— 不再用横向滑动藏源
+  var cur = curSrcFilter || '全部';
+  var ch = '<div class="srchead"><button onclick="toggleSrcPanel()">源：' + esc(cur)
+    + ' <span class="cnt">(' + (curSrcFilter ? (count[curSrcFilter] || 0) : allResults.length) + ' 条 / 共 '
+    + order.length + ' 个源)</span> ▾</button></div><div class="srcbody">';
+  ch += '<button class="' + (curSrcFilter === '' ? 'on' : '') + '" onclick="filterSrc(&quot;&quot;)">全部 ' + allResults.length + '</button>';
   for (var j = 0; j < order.length; j++) {
     ch += '<button class="' + (curSrcFilter === order[j] ? 'on' : '') + '" onclick="filterSrc(&quot;' + esc(order[j]) + '&quot;)">' + esc(order[j]) + ' ' + count[order[j]] + '</button>';
   }
+  ch += '</div>';
   box.innerHTML = ch;
   box.style.display = '';
+  try { if (srcPanelOpen) box.classList.add('open'); else box.classList.remove('open'); } catch(e) {}
+}
+var srcPanelOpen = false;
+function toggleSrcPanel(){
+  srcPanelOpen = !srcPanelOpen;
+  var box = document.getElementById('srcChips');
+  try { if (box) { if (srcPanelOpen) box.classList.add('open'); else box.classList.remove('open'); } } catch(e) {}
 }
 function filterSrc(k){
   curSrcFilter = k || '';
+  srcPanelOpen = false;          // 选完就收起来(抽屉语义)
   buildChips();
   renderSearch();
 }
@@ -3762,13 +3776,21 @@ function decKw(){
 function decKwSave(){
   var el = document.getElementById('decKw');
   if (!el) return;
-  try { localStorage.setItem('pk_deckw', (el.value || '').trim()); } catch(e) {}
+  try {
+    localStorage.setItem('pk_deckw', (el.value || '').trim());
+    localStorage.setItem('pk_deckw_set', '1');   // 记下"这是用户自己的选择"
+  } catch(e) {}
 }
 function decKwRestore(){
   var el = document.getElementById('decKw');
   if (!el || el.value) return;
-  try { el.value = localStorage.getItem('pk_deckw') || ''; } catch(e) {}
+  var saved = null, touched = null;
+  try { saved = localStorage.getItem('pk_deckw'); touched = localStorage.getItem('pk_deckw_set'); } catch(e) {}
+  // 默认给一个**两个字、短剧与普通剧集都通用**的测试片名(用户要求); 他一旦自己改过就完全听他的
+  // (包括"清空" —— 清空 = 只按首页片单/homeContent 验活)。
+  el.value = (touched ? (saved || '') : '重生');
 }
+var DEC_KW_DEFAULT = '重生';
 function decGo(){
   decKwSave();
   var v = (document.getElementById('decIn').value || '').trim();
