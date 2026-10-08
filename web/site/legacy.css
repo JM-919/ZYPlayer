@@ -1,7 +1,29 @@
 /* 由 tools/legacy_css.py 从 index.html 的 <style> 生成, 别手改。
    给不认识 CSS 变量的老内核(Android 6 及以下)用: 变量已展开, flex/transform 补了 -webkit- 前缀。
    现代设备不加载这个文件(见 index.html 里的能力检测)。 */
-*{-webkit-box-sizing:border-box;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html.light{--bg:#f4f6fa;--bg2:rgba(0,0,0,.045);--card:rgba(255,255,255,.86);--line:rgba(0,0,0,.10);
+    --fg:#111827;--dim:#5b6678;
+    --g1:linear-gradient(180deg, rgba(255,255,255,.95), rgba(240,243,248,.92));
+    --g2:linear-gradient(180deg, rgba(255,255,255,1), rgba(238,242,247,.96));
+    --hair:rgba(0,0,0,.12);
+    --sh:0 6px 18px rgba(20,30,50,.12), inset 0 1px 0 rgba(255,255,255,.9);}
+  html.light body::before{background:
+    radial-gradient(60% 40% at 15% 8%, rgba(61,220,127,.16), transparent 70%),
+    radial-gradient(50% 40% at 85% 0%, rgba(90,160,255,.14), transparent 70%),
+    radial-gradient(60% 50% at 50% 110%, rgba(255,190,90,.12), transparent 70%);}
+  html.light header{background:linear-gradient(180deg, rgba(255,255,255,.92), rgba(255,255,255,.55));
+    border-bottom:1px solid rgba(0,0,0,.08);}
+  html.light #main{-webkit-box-shadow:none;box-shadow:none;}
+  html.light .item{background:#fff;box-shadow:0 4px 12px rgba(20,30,50,.10);}
+  html.light .item .nm,html.light .item .meta{text-shadow:none;}
+  html.light #pset,html.light #plist,html.light #qlist,html.light #pvip,html.light #pcast
+    {background:linear-gradient(180deg,#ffffff,#f2f5fa);color:#eef3fb;}
+  html.light section .bar .tag{background:rgba(0,0,0,.05);}
+  html.light textarea,html.light input[type=search],html.light input[type=text],html.light #decKw{
+    background:rgba(0,0,0,.04)!important;color:#111827!important;border-color:rgba(0,0,0,.14)!important;}
+  
+  html.light #player,html.light #webvip{background:#000;}
+  *{-webkit-box-sizing:border-box;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
   html,body{margin:0;height:100%;background:#07090e;color:#eef3fb;
     font:15px/1.5 -apple-system,"PingFang SC","Noto Sans CJK SC",sans-serif;overflow:hidden;}
   

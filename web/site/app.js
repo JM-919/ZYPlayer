@@ -4807,6 +4807,64 @@ function zyDiagDraw(){
   } catch(e) {}
 }
 
+/* ---------------- 主题: 深色 / 白天 / 静默随系统 ----------------
+ * 用户要"来决定是深色主题还是浅色主题": 三档 —— dark / light / system(默认, 跟手机走)。
+ * 判定顺序: 有 App 桥就用桥(Android 的 Configuration.uiMode 最准, 老内核也认),
+ * 没有就用 matchMedia('(prefers-color-scheme: light)') —— 网页端/新内核都支持。
+ * 只切 html 上的 light 类, 颜色全在 CSS 变量里, 不动其它类(比如网页端的 html.web)。
+ */
+var THEME_KEY = 'pk_theme';
+function themeWanted(){
+  var v = 'system';
+  try { v = localStorage.getItem(THEME_KEY) || 'system'; } catch(e) {}
+  return (v === 'dark' || v === 'light') ? v : 'system';
+}
+function systemIsLight(){
+  try { if (PK.systemTheme) return String(PK.systemTheme()) === 'light'; } catch(e) {}
+  try { return !!(window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches); } catch(e) {}
+  return false;
+}
+/** 应用主题: 深色=去掉 light, 浅色=加 light; system 时按系统 */
+function applyTheme(){
+  var w = themeWanted();
+  var light = (w === 'light') || (w === 'system' && systemIsLight());
+  try { document.documentElement.classList.toggle('light', !!light); } catch(e) {}
+  // 状态栏/系统栏跟着走(App 侧 Java 支持; 网页端没有就跳过)
+  try { if (PK.setBarTheme) PK.setBarTheme(light ? 'light' : 'dark'); } catch(e) {}
+  try { renderThemeRow(); } catch(e) {}
+}
+function themePick(v){
+  try { localStorage.setItem(THEME_KEY, v); } catch(e) {}
+  applyTheme();
+  try { PK.toast(v === 'dark' ? '已切到深色主题' : (v === 'light' ? '已切到白天主题' : '已切到随系统(静默跟随手机)')); } catch(e) {}
+}
+/** 设置抽屉里那三个按钮的选中状态 + 一句说明 */
+function renderThemeRow(){
+  var w = themeWanted();
+  var on = { dark: 'on', light: 'on', system: 'on' };
+  var ids = { dark: 'psThemeDark', light: 'psThemeLight', system: 'psThemeSys' };
+  for (var k in ids) {
+    var b = document.getElementById(ids[k]);
+    if (!b) continue;
+    if (k === w) { b.style.background = 'linear-gradient(180deg,#3ddc7f,#1fa855)'; b.style.color = '#04120a'; }
+    else { b.style.background = ''; b.style.color = ''; }
+  }
+  var tip = document.getElementById('psThemeTip');
+  if (tip) tip.textContent = w === 'system'
+    ? ('静默跟随手机（当前' + (systemIsLight() ? '白天' : '深色') + '）')
+    : (w === 'light' ? '固定白天主题' : '固定深色主题');
+}
+/** App 侧系统主题变了(切了手机的深/浅色) → 只有在"随系统"时才跟着换 */
+function onSystemTheme(t){
+  if (themeWanted() === 'system') applyTheme();
+}
+try {   // 网页端/新内核: 系统主题变化也能收到
+  if (window.matchMedia) {
+    var mq = matchMedia('(prefers-color-scheme: light)');
+    if (mq.addEventListener) mq.addEventListener('change', function(){ if (themeWanted() === 'system') applyTheme(); });
+  }
+} catch(e) {}
+
 function applyWebMode(){
   if (!isWeb()) return;
   if (window.__webModeApplied) return;      // 幂等: 迟到的补做不能重复挂监听
@@ -4997,6 +5055,7 @@ function bootStep(name, fn){
   catch (e) { try { console.warn('[启动] ' + name + ' 失败: ' + (e && e.message)); } catch(e2){} }
 }
 bootStep('网页端适配', function(){ applyWebMode(); });   // 先做它: 只动 DOM, 绝不连累后面的界面初始化
+bootStep('主题', function(){ applyTheme(); });            // 启动就定主题(深色/白天/随系统), 免得先闪白的
 bootStep('站点列表', function(){ initSites(); });
 bootStep('播放器设置', function(){ initPlayerSettings(); });   // 画面比例/缓冲/超时/OSD/换台 先读回来再画界面
 bootStep('连播设置', function(){ initAutoNext(); });

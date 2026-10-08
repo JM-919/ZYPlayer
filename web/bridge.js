@@ -718,6 +718,18 @@
     //   凡是"只有原生做得到"的东西(投屏 / 解析线路 / 调起外部播放器 / 应用内更新 / 蜘蛛 jar / 下载),
     //   靠这个标记在网页端**连按钮带入口一起去掉**; App 侧没有 PK.web, 行为一个字节不变。
     web: true,
+    /** 系统主题(网页端用 matchMedia) —— 主题选"随系统"时由它判定 */
+    systemTheme: function () {
+      try { return (root.matchMedia && root.matchMedia('(prefers-color-scheme: light)').matches) ? 'light' : 'dark'; }
+      catch (e) { return 'dark'; }
+    },
+    setBarTheme: function (theme) {     // 网页端: 同步浏览器地址栏/系统栏配色(支持的浏览器才生效)
+      try {
+        var m = document.querySelector('meta[name="theme-color"]');
+        if (!m) { m = document.createElement('meta'); m.name = 'theme-color'; document.head.appendChild(m); }
+        m.content = (theme === 'light') ? '#f4f6fa' : '#07090e';
+      } catch (e) {}
+    },
     toast: function (m) { root.PK_toast(m); },
     appVersion: function () { return 'web-' + (CFG.version || 'dev'); },
     isLandscape: function () {

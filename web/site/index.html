@@ -14,6 +14,31 @@
         --blur:blur(20px) saturate(150%);
         --blurS:blur(12px) saturate(130%);
         --sh:0 10px 28px rgba(0,0,0,.42), inset 0 1px 0 rgba(255,255,255,.13);}
+  /* ===== 白天模式(浅色主题) =====
+     只覆盖变量 + 背景光斑 + 少数写死的暗色, 其余组件(卡片/抽屉/胶囊/列表)都靠变量, 一处改全局生效。
+     主题由 app.js 的 applyTheme() 决定: 深色 / 白天 / 静默随系统(html.light 表示浅色)。 */
+  html.light{--bg:#f4f6fa;--bg2:rgba(0,0,0,.045);--card:rgba(255,255,255,.86);--line:rgba(0,0,0,.10);
+    --fg:#111827;--dim:#5b6678;
+    --g1:linear-gradient(180deg, rgba(255,255,255,.95), rgba(240,243,248,.92));
+    --g2:linear-gradient(180deg, rgba(255,255,255,1), rgba(238,242,247,.96));
+    --hair:rgba(0,0,0,.12);
+    --sh:0 6px 18px rgba(20,30,50,.12), inset 0 1px 0 rgba(255,255,255,.9);}
+  html.light body::before{background:
+    radial-gradient(60% 40% at 15% 8%, rgba(61,220,127,.16), transparent 70%),
+    radial-gradient(50% 40% at 85% 0%, rgba(90,160,255,.14), transparent 70%),
+    radial-gradient(60% 50% at 50% 110%, rgba(255,190,90,.12), transparent 70%);}
+  html.light header{background:linear-gradient(180deg, rgba(255,255,255,.92), rgba(255,255,255,.55));
+    border-bottom:1px solid rgba(0,0,0,.08);}
+  html.light #main{-webkit-box-shadow:none;box-shadow:none;}
+  html.light .item{background:#fff;box-shadow:0 4px 12px rgba(20,30,50,.10);}
+  html.light .item .nm,html.light .item .meta{text-shadow:none;}
+  html.light #pset,html.light #plist,html.light #qlist,html.light #pvip,html.light #pcast
+    {background:linear-gradient(180deg,#ffffff,#f2f5fa);color:var(--fg);}
+  html.light section .bar .tag{background:rgba(0,0,0,.05);}
+  html.light textarea,html.light input[type=search],html.light input[type=text],html.light #decKw{
+    background:rgba(0,0,0,.04)!important;color:#111827!important;border-color:rgba(0,0,0,.14)!important;}
+  /* 播放器/嗅探页始终是深色(视频画面), 不做浅色 */
+  html.light #player,html.light #webvip{background:#000;}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);
     font:15px/1.5 -apple-system,"PingFang SC","Noto Sans CJK SC",sans-serif;overflow:hidden;}
@@ -822,6 +847,11 @@
     <div class="eps" id="pvipBox"></div></div>
   <div id="pset"><button class="pclose" onclick="closeSheets()">✕</button>
     <h3 id="psTitle">播放器设置 <span class="dim" style="font-size:12px;font-weight:400">（改完立刻生效, 下次打开还记得）</span></h3>
+    <div class="skiprow"><label>主题</label>
+      <button class="pbtn" id="psThemeDark" onclick="themePick('dark')">深色</button>
+      <button class="pbtn" id="psThemeLight" onclick="themePick('light')">白天</button>
+      <button class="pbtn" id="psThemeSys" onclick="themePick('system')">随系统</button>
+      <span class="dim" style="font-size:12px" id="psThemeTip">静默跟随手机</span></div>
     <div class="skiprow"><label>画面比例</label><button class="pbtn" id="psRatio" onclick="cycleFit()">适应</button>
     <span class="dim" style="font-size:12px">适应/铺满/裁剪/16:9/4:3/原始</span></div>
     <div class="skiprow"><label>缓冲档位</label><button class="pbtn" id="psBuf" onclick="psCycleBuf()">标准</button>
