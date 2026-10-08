@@ -353,7 +353,7 @@ function doSearch(){
   document.getElementById('searchGrid').innerHTML = '';
   var sc = document.getElementById('srcChips');
   if (sc) { sc.innerHTML = ''; sc.style.display = 'none'; }
-  allResults = []; curSrcFilter = '';          // 新搜索: 源筛选回到"全部"
+  allResults = []; suResults = []; curSrcFilter = '';   // 新搜索: 源筛选回到"全部", 短剧结果也清空
   VOD.search(k);
   // 短剧源也一起搜(用户要求: 搜索要能搜到短剧源)。从短剧条目点进来时 suSkipOnce=true, 跳过,
   // 否则"点短剧结果 -> 又只搜出短剧"会打转。
@@ -364,24 +364,29 @@ function doSearch(){
 
 /* ---------- 搜索结果: 源标签筛选 (替代之前堆叠分组) ---------- */
 var allResults = [], curSrcFilter = '';
+/* 短剧源的结果单独存: VOD 搜索是"边收边显示"、每次回调都会**整体替换** allResults,
+   以前把短剧结果 push 进 allResults, 下一批点播结果一到就被冲掉 —— 这就是"搜索里看不到短剧源"的原因。 */
+var suResults = [];
+function mergedResults(){ return allResults.concat(suResults); }
 function onVodSearch(items){
   allResults = items || [];
+  items = mergedResults();          // 计数/文案/渲染都用"点播 + 短剧"的合并结果
   // 这里**不能**清 curSrcFilter: Java 是"边收边显示", 一次搜索会回调好几次,
   // 每次清一下就把用户刚点的源筛选抹掉了(新搜索开始时才重置, 见 doSearch)
   var tip = document.getElementById('searchTip');
-  if (!allResults.length) {
+  if (!items.length) {
     tip.textContent = (lastSearchWord ? ('「' + lastSearchWord + '」没搜到, ') : '') + '换个词或换源试试';
     document.getElementById('searchGrid').innerHTML = '';
     document.getElementById('srcChips').innerHTML = '';
     return;
   }
   var count = {}, order = [];
-  for (var i = 0; i < allResults.length; i++) {
-    var k = allResults[i].siteName || '未知';
+  for (var i = 0; i < items.length; i++) {
+    var k = items[i].siteName || '未知';
     if (count[k] === undefined) { count[k] = 0; order.push(k); }
     count[k]++;
   }
-  tip.textContent = (lastSearchWord ? ('「' + lastSearchWord + '」· ') : '') + '找到 ' + allResults.length + ' 个结果 · 来自 ' + order.length + ' 个源';
+  tip.textContent = (lastSearchWord ? ('「' + lastSearchWord + '」· ') : '') + '找到 ' + items.length + ' 个结果 · 来自 ' + order.length + ' 个源';
   buildChips(count, order);
   renderSearch();
 }
@@ -409,11 +414,11 @@ function filterSrc(k){
   renderSearch();
 }
 function renderSearch(){
-  var list = [];
-  for (var i = 0; i < allResults.length; i++) {
-    if (curSrcFilter && (allResults[i].siteName || '未知') !== curSrcFilter) continue;
-    allResults[i]._idx = list.length;
-    list.push(allResults[i]);
+  var list = [], src = mergedResults();
+  for (var i = 0; i < src.length; i++) {
+    if (curSrcFilter && (src[i].siteName || '未知') !== curSrcFilter) continue;
+    src[i]._idx = list.length;
+    list.push(src[i]);
   }
   searchItems = list;
   renderGrid(document.getElementById('searchGrid'), list, 0, 'search');
@@ -868,11 +873,35 @@ function clearHistory(){
  * 既有链路(和豆瓣首页完全一致), 所以这一页不需要新的详情/播放实现, 也不会动原有逻辑。
  */
 var suanjuItems = [], suanjuKey = '', suanjuPage = 1, suanjuSeq = 0, suanjuSrcCache = null;
+var suanjuRoute = '', suanjuRtCache = null;
 function suanjuSourcesList(){
   if (suanjuSrcCache) return suanjuSrcCache;
   suanjuSrcCache = [];
   try { suanjuSrcCache = JSON.parse(PK.suanjuSources()) || []; } catch(e) { suanjuSrcCache = []; }
   return suanjuSrcCache;
+}
+/** 某个源的分类/榜单标签(原生给清单; 网页版由 bridge.js 给同一份; 都没有时只有"首页") */
+function suanjuRoutesList(key){
+  if (!suanjuRtCache) {
+    suanjuRtCache = [];
+    try { if (PK.suanjuRoutes) suanjuRtCache = JSON.parse(PK.suanjuRoutes()) || []; } catch(e) { suanjuRtCache = []; }
+  }
+  var out = [];
+  for (var i = 0; i < suanjuRtCache.length; i++) if (suanjuRtCache[i].key === key) out.push(suanjuRtCache[i]);
+  if (!out.length) out = [{ key: key, title: '首页' }];
+  return out;
+}
+function suanjuRouteName(){
+  var rs = suanjuRoutesList(suanjuKey), i;
+  for (i = 0; i < rs.length; i++) if (rs[i].title === suanjuRoute) return suanjuRoute;
+  suanjuRoute = rs[0].title;
+  return suanjuRoute;
+}
+/** 当前标签能不能翻页(榜单只有一页; 原生/网页给 paged 字段, 没给就按"能翻"处理) */
+function suanjuRoutePaged(){
+  var rs = suanjuRoutesList(suanjuKey), cur = suanjuRouteName();
+  for (var i = 0; i < rs.length; i++) if (rs[i].title === cur) return rs[i].paged !== false;
+  return true;
 }
 function showSuanju(){
   show('v-suanju');
@@ -895,11 +924,33 @@ function fillSuanjuSrc(){
   }
   box.innerHTML = h;
   if (note) note.textContent = off.length ? ('未接入: ' + off.join(' · ')) : '';
+  fillSuanjuRoute();
+}
+/** 分类/榜单一行: 只有一条(如鬼片/韩小圈的"最新")时不占地方, 直接隐藏 */
+function fillSuanjuRoute(){
+  var box = document.getElementById('suanjuRoute');
+  if (!box) return;
+  var rs = suanjuRoutesList(suanjuKey), cur = suanjuRouteName(), h = '';
+  if (rs.length < 2) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  for (var i = 0; i < rs.length; i++) {
+    h += '<button type="button" class="sjchip rt' + (rs[i].title === cur ? ' on' : '') + '" data-rt="' + esc(rs[i].title) + '"'
+      + ' onclick="pickSuanjuRoute(this)">' + esc(rs[i].title) + '</button>';
+  }
+  box.innerHTML = h;
+  box.style.display = '';
+}
+function pickSuanjuRoute(el){
+  var t = el && el.getAttribute('data-rt');
+  if (!t || t === suanjuRoute) return;
+  suanjuRoute = t;
+  fillSuanjuRoute();
+  loadSuanju(1);
 }
 function pickSuanju(el){
   var k = el && el.getAttribute('data-key');
   if (!k) return;
   suanjuKey = k;
+  suanjuRoute = '';                 // 换源就把标签归位到该源的第一条
   fillSuanjuSrc();
   loadSuanju(1);
 }
@@ -909,20 +960,26 @@ function loadSuanju(force){
   var grid = document.getElementById('suanjuGrid'), more = document.getElementById('suanjuMore');
   if (grid && force) grid.innerHTML = skeleton(6);
   if (more) more.textContent = '加载中…';
-  var seq = ++suanjuSeq;
-  try { PK.suanju(suanjuKey, suanjuPage, seq); }
+  var seq = ++suanjuSeq, rt = suanjuRouteName();
+  try {
+    if (PK.suanjuRoute) PK.suanjuRoute(suanjuKey, rt, suanjuPage, seq);
+    else PK.suanju(suanjuKey, suanjuPage, seq);
+  }
   catch (e) { if (more) more.textContent = '这一版没接短剧接口'; }
 }
-function moreSuanju(){ suanjuPage++; loadSuanju(false); }
+function moreSuanju(){
+  if (!suanjuRoutePaged()) return;          // 榜单/最新类只有一页, 点了也是同一批, 干脆不动
+  suanjuPage++;
+  loadSuanju(false);
+}
 /** 短剧搜索回来了: 并进搜索结果(带来源名, 会被源筛选条识别成独立一栏)。 */
 function onSuanjuSearch(seq, items){
-  if (seq !== suSeq || !items || !items.length) return;
-  for (var i = 0; i < items.length; i++) {
-    items[i].su = 1;
-    allResults.push(items[i]);
-  }
+  if (seq !== suSeq) return;
+  suResults = items || [];
+  for (var i = 0; i < suResults.length; i++) suResults[i].su = 1;
+  suanjuFillPosters(suResults);
+  // 合并后重画: 点播结果(可能还在陆续到) + 短剧结果
   try { onVodSearch(allResults); } catch (e) { try { renderSearch(); } catch (e2) {} }
-  suanjuFillPosters(allResults);
 }
 
 /** 没有海报的短剧条目: 借豆瓣按片名取封面(鬼片那站已经下线, RSS 里没有封面) */
@@ -939,15 +996,28 @@ function suanjuFillPosters(items){
 function onSuanju(seq, items){
   if (seq !== suanjuSeq) return;                 // 迟到的旧响应丢掉(与首页同一套 seq 约定)
   items = items || [];
-  suanjuItems = (suanjuPage === 1) ? items : suanjuItems.concat(items);
+  for (var q = 0; q < items.length; q++) items[q].su = 1;   // 页内条目也标成短剧条目(点开时只搜点播源)
+  if (suanjuPage === 1) {
+    suanjuItems = items;
+  } else {
+    // 榜单类路由没有下一页, 再点"更多"会回同一批 —— 按片名去重, 免得同一部戏列两遍
+    var seen = {}, i;
+    for (i = 0; i < suanjuItems.length; i++) seen[suanjuItems[i].name] = 1;
+    for (i = 0; i < items.length; i++) {
+      if (seen[items[i].name]) continue;
+      seen[items[i].name] = 1;
+      suanjuItems.push(items[i]);
+    }
+  }
   var grid = document.getElementById('suanjuGrid'), more = document.getElementById('suanjuMore');
   if (grid) renderGrid(grid, suanjuItems, 0, 'suanju');
   suanjuFillPosters(suanjuItems);
   if (more) {
     var src = suanjuSourcesList().filter(function (x) { return x.key === suanjuKey; })[0] || {};
+    var nm = (src.name || suanjuKey) + (suanjuRoute && suanjuRoute !== '首页' ? (' · ' + suanjuRoute) : '');
     more.textContent = suanjuItems.length
-      ? ('— ' + (src.name || suanjuKey) + ' · 共 ' + suanjuItems.length + ' 部, 点这里加载更多 —')
-      : ('— ' + (src.name || suanjuKey) + ' 暂时没有取到片单' + (src.status ? ('(' + src.status + ')') : '') + ' —');
+      ? ('— ' + nm + ' · 共 ' + suanjuItems.length + ' 部,' + (suanjuRoutePaged() ? ' 点这里加载更多 —' : ' —'))
+      : ('— ' + nm + ' 暂时没有取到片单' + (src.status ? ('(' + src.status + ')') : '') + ' —');
   }
 }
 

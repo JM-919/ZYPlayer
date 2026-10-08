@@ -108,6 +108,10 @@
   .sjchip.on{background:var(--grn);color:#07120a;font-weight:600;border-color:transparent;}
   .sjchip.off{opacity:.42;cursor:default;}
   #suanjuSrcNote{margin:-6px 0 10px;font-size:12px;color:var(--dim);}
+  /* 第二行: 该源的分类/榜单(红果 4 分类 + 4 榜单)。只有一条的源整行隐藏, 不占地方 */
+  #suanjuRoute{display:-webkit-box;display:-webkit-flex;display:flex;-webkit-flex-wrap:wrap;flex-wrap:wrap;gap:6px;margin:-6px 0 12px;}
+  .sjchip.rt{background:transparent;border-color:var(--hair);color:var(--dim);padding:5px 9px;font-size:12px;}
+  .sjchip.rt.on{background:var(--g1);color:var(--fg);font-weight:600;border-color:var(--grn);}
 
   /* ================= 网页端自适应(照静态博客的做法) =================
      参考用户自己的博客(felixdsh2.eu.cc): 文档自然滚动 + 容器限宽(~1080px) +
@@ -600,6 +604,7 @@
       </div>
       <div id="suanjuSrc"></div>
       <div id="suanjuSrcNote"></div>
+      <div id="suanjuRoute"></div>
       <div class="grid" id="suanjuGrid"></div>
       <div id="suanjuMore" onclick="moreSuanju()" style="cursor:pointer">— 点这里加载更多 —</div>
     </section>

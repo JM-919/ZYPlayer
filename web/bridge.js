@@ -727,26 +727,56 @@
       call('onSuanjuSearch', seq, out);
     }).catch(function () { call('onSuanjuSearch', seq, []); });
   }
+  /** 红果列表页(首页/分类/榜单/搜索 同一套卡片) -> 条目。三种卡片结构都要认(与 Java 版 Suanju 一致) */
+  function parseHongguoList(html, base) {
+    var out = [], seen = {}, re = /href="\/detail\?series_id=(\d+)"([\s\S]{0,2600}?)(?:<\/a>|href="\/detail\?series_id=)/g, m, guard = 0;
+    while ((m = re.exec(html)) && out.length < 30 && guard++ < 300) {
+      var block = m[2];
+      var t = /class="pc-scatter-card-title[^"]*"[^>]*>([^<]+)</.exec(block);   // ① 首页 hero 卡
+      if (!t) t = /class="pc-title-[^"]*"[^>]*>([^<]+)</.exec(block);          // ③ 榜单卡(类名带随机后缀)
+      if (!t) t = /<img[^>]*alt="([^"]{2,})"/.exec(block);                     // ② 列表/分类卡
+      if (!t) continue;
+      var name = String(t[1]).replace(/[\u0000-\u001F\u007F]/g, '').replace(/\s+/g, ' ').trim();  // 榜单页标题夹 NUL
+      if (name.length > 2 && name.slice(-2) === '封面') name = name.slice(0, -2).trim();  // alt 自带的后缀
+      if (!usableDramaName(name) || seen[name]) continue;       // 剔掉 SEO/占位文案与重复
+      seen[name] = 1;
+      // 封面: 首页 image-XXXX / 榜单 pc-cover-XXXX / 裸 img 三种(漏了中间那个榜单整页没海报)
+      var img = /<img[^>]*class="image-[^"]*"[^>]*src="([^"]+)"/.exec(block)
+             || /<img[^>]*class="pc-cover-[^"]*"[^>]*src="([^"]+)"/.exec(block)
+             || /<img[^>]*\ssrc="(https?:\/\/[^"]+)"/.exec(block);
+      var ep = /class="pc-scatter-episode-[^"]*"[^>]*>([^<]*)</.exec(block);
+      out.push(suanjuItem(name, img ? img[1] : '', base + '/', ep ? ep[1].trim() : '', '红果', m[1]));
+    }
+    return out;
+  }
+  // 分类/榜单路由: 与 Java 版 Suanju.ROUTES 同一份(红果 4 分类各有 30+ 页分页, 4 榜单各 20 条)
+  var SUANJU_ROUTES = [
+    { key: 'hongguo', title: '首页', path: '' },
+    { key: 'hongguo', title: '真人剧', path: '/category/real-drama?page={p}' },
+    // /category/comic 是漫剧频道落地页(卡片不走 /detail?series_id=), 取不到条目, 故不列
+    { key: 'hongguo', title: '漫剧集', path: '/category/comic-drama?page={p}' },
+    { key: 'hongguo', title: 'AI剧', path: '/category/ai-drama?page={p}' },
+    { key: 'hongguo', title: '热播榜', path: '/rank/hot-drama' },
+    { key: 'hongguo', title: '真人榜', path: '/rank/hot-real-drama' },
+    { key: 'hongguo', title: '漫剧榜', path: '/rank/hot-comic-drama' },
+    { key: 'hongguo', title: 'AI榜', path: '/rank/hot-ai-drama' },
+    { key: 'guipian', title: '最新', path: '' },
+    { key: 'hanxiaoquan', title: '最新', path: '' }
+  ];
+  function suanjuRoutes() {
+    var a = [];
+    for (var i = 0; i < SUANJU_ROUTES.length; i++) {
+      if (!suanjuSupported(SUANJU_ROUTES[i].key)) continue;
+      a.push({ key: SUANJU_ROUTES[i].key, title: SUANJU_ROUTES[i].title,
+               paged: SUANJU_ROUTES[i].path.indexOf('{p}') >= 0 });
+    }
+    return JSON.stringify(a);
+  }
   function suanjuHome(key, page, seq) {
     var pg = Math.max(1, page || 1), jobs;
     if (key === 'hongguo') {
       var base = 'https://hongguoduanju.com';
-      jobs = suanjuText(base + '/', base + '/').then(function (html) {
-        var out = [], seen = {}, re = /href="\/detail\?series_id=(\d+)"([\s\S]{0,2600}?)(?:<\/a>|href="\/detail\?series_id=)/g, m, guard = 0;
-        while ((m = re.exec(html)) && out.length < 30 && guard++ < 300) {
-          var block = m[2];
-          var t = /class="pc-scatter-card-title[^"]*"[^>]*>([^<]+)</.exec(block);
-          if (!t) t = /<img[^>]*alt="([^"]{2,})"/.exec(block);      // 列表卡: 剧名只在 alt 里
-          if (!t) continue;
-          var name = String(t[1]).replace(/\s+/g, ' ').trim();
-          if (!usableDramaName(name) || seen[name]) continue;       // 剔掉 SEO/占位文案与重复
-          seen[name] = 1;
-          var img = /<img[^>]*class="image-[^"]*"[^>]*src="([^"]+)"/.exec(block);
-          var ep = /class="pc-scatter-episode-[^"]*"[^>]*>([^<]*)</.exec(block);
-          out.push(suanjuItem(name, img ? img[1] : '', base + '/', ep ? ep[1].trim() : '', '红果', m[1]));
-        }
-        return out;
-      });
+      jobs = suanjuText(base + '/', base + '/').then(function (html) { return parseHongguoList(html, base); });
     } else if (key === 'guipian') {
       var gb = 'https://guipianwu.com';
       jobs = suanjuText(gb + '/xml/rss.xml', gb + '/').then(function (xml) {
@@ -780,9 +810,25 @@
         .catch(function () { call('onSuanju', seq, []); });
   }
 
+  /** 按分类/榜单路由取一页(短剧页第二行标签); 路由为空或该源只有默认列表时退回 suanjuHome */
+  function suanjuRoute(key, title, page, seq) {
+    var r = null;
+    for (var i = 0; i < SUANJU_ROUTES.length; i++) {
+      if (SUANJU_ROUTES[i].key === key && SUANJU_ROUTES[i].title === title) { r = SUANJU_ROUTES[i]; break; }
+    }
+    if (!r || !r.path || key !== 'hongguo') return suanjuHome(key, page, seq);
+    var pg = Math.max(1, page || 1), base = 'https://hongguoduanju.com';
+    var url = base + r.path.replace('{p}', String(pg));
+    suanjuText(url, base + '/').then(function (html) {
+      call('onSuanju', seq, parseHongguoList(html, base));
+    }).catch(function () { call('onSuanju', seq, []); });
+  }
+
   var PK = {
     suanjuSources: suanjuSources,
     suanju: suanjuHome,
+    suanjuRoutes: suanjuRoutes,
+    suanjuRoute: suanjuRoute,
     suanjuSearch: suanjuSearchAll,
     // ★ 网页版标记: app.js 与 index.html 是 App / 网页共用的同一份界面,
     //   凡是"只有原生做得到"的东西(投屏 / 解析线路 / 调起外部播放器 / 应用内更新 / 蜘蛛 jar / 下载),
