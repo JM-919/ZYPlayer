@@ -52,6 +52,12 @@
   .kwprev .it:active{background:rgba(255,255,255,.07);}
   .kwprev .it .nm{-webkit-box-flex:1;-webkit-flex:1;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .kwprev .it .tag{font-size:11px;color:#93a1b8;-webkit-box-flex:0;-webkit-flex:none;flex:none;}
+  
+  #kwHist{display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;-webkit-flex-wrap:wrap;-webkit-flex-wrap:wrap;flex-wrap:wrap;gap:6px;-webkit-box-align:center;-webkit-align-items:center;align-items:center;margin:2px 0 8px;}
+  #kwHist .lbl{font-size:11.5px;color:#93a1b8;}
+  .kwchip{background:linear-gradient(180deg, rgba(255,255,255,.095), rgba(255,255,255,.038));color:#93a1b8;border:1px solid rgba(255,255,255,.125);border-radius:99px;
+    padding:5px 10px;font-size:12px;max-width:44vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .kwchip.clr{color:#ff9d9d;border-color:rgba(255,120,120,.35);}
   .kwprev .it.go{color:#7cc4ff;font-weight:600;}
   
   .chips{display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;margin-bottom:10px;}

@@ -66,6 +66,12 @@
   .kwprev .it:active{background:rgba(255,255,255,.07);}
   .kwprev .it .nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .kwprev .it .tag{font-size:11px;color:var(--dim);flex:none;}
+  /* 最近搜过: 一行小胶囊, 与源标签同观感 */
+  #kwHist{display:flex;-webkit-flex-wrap:wrap;flex-wrap:wrap;gap:6px;align-items:center;margin:2px 0 8px;}
+  #kwHist .lbl{font-size:11.5px;color:var(--dim);}
+  .kwchip{background:var(--g1);color:var(--dim);border:1px solid var(--hair);border-radius:99px;
+    padding:5px 10px;font-size:12px;max-width:44vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .kwchip.clr{color:#ff9d9d;border-color:rgba(255,120,120,.35);}
   .kwprev .it.go{color:#7cc4ff;font-weight:600;}
   /* ★ .chips 是**共用**样式(直播页的分组 #liveGroups 也在用) —— 所以它必须保持原样:
      单行 + 横向滚动。2026-10 我把这里改成"换行铺开", 结果直播页的分组也一起变成了几百个标签的大墙,
@@ -582,6 +588,8 @@
       </div>
       <!-- 搜索预览: 边打字边列出"本页已加载的片子 / 观看记录"里包含这几个字的名字, 点一条直接搜 -->
       <div class="kwprev" id="kwPrev"></div>
+      <!-- 搜索历史(记忆): 输入框下面一排"最近搜过", 点一下直接再搜 -->
+      <div id="kwHist" style="display:none"></div>
       <div class="chips" id="srcChips" style="display:none"></div>
       <div class="grid" id="searchGrid"></div>
       <div class="empty" id="searchTip">输入片名, 一次并发搜多个源</div>

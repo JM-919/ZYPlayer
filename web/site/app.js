@@ -228,7 +228,21 @@ function onVodHome(seq, items){
  * ① 主页搜索框回车(searchFromHome) ② 详情页的「搜索」按钮。这个函数保留着(闸门 ④ 也钉着它),
  * 谁要再加"进搜索页"的入口就直接用它(它比 show('v-search') 多一步聚焦, 用户不用再点一下输入框)。
  */
-function openSearch(){ show('v-search'); var k = document.getElementById('kw'); if (k) k.focus(); }
+function openSearch(){
+  show('v-search');
+  var k = document.getElementById('kw');
+  // 回到搜索页: 把上次搜的词填回去、把上次的结果重画出来 —— 不用每次重新搜
+  // (点「历史」等页面离开时, Java 那边其实还在搜; allResults 也一直在累积, 这里只是把它们显示回来)
+  if (k && !k.value && lastSearchWord) k.value = lastSearchWord;
+  try { renderKwHist(); } catch(e) {}
+  try {
+    if (allResults && allResults.length) { buildChips(); renderSearch(); }
+    else if (document.getElementById('searchGrid') && !document.getElementById('searchGrid').children.length) {
+      document.getElementById('searchTip').textContent = '输入片名, 一次并发搜多个源';
+    }
+  } catch(e) {}
+  if (k) k.focus();
+}
 /**
  * 输入法回车搜索。
  * 为什么写得这么啰嗦: 不少中文输入法在**组词未上屏**时按回车, keydown 报的是 229(或 isComposing=true),
@@ -270,6 +284,47 @@ function histTitles(){
   } catch(e){}
   return out;
 }
+/* ---------------- 搜索历史(记忆) ----------------
+ * 用户: "搜索功能没有联想功能, 也没有记忆功能"。历史存 localStorage(最近 20 条, 新的在前, 去重),
+ * 输入框下当"建议"用, 并在联想里排在"上次结果/观看记录/首页"之前。
+ */
+var KW_HIST_MAX = 20, kwHistCache = null;
+function kwHist(){
+  if (kwHistCache) return kwHistCache;
+  kwHistCache = [];
+  try { kwHistCache = JSON.parse(localStorage.getItem('pk_kwhist') || '[]') || []; } catch(e) { kwHistCache = []; }
+  return kwHistCache;
+}
+function kwHistPush(word){
+  var w = String(word || '').trim();
+  if (!w) return;
+  var a = kwHist().filter(function(x){ return x !== w; });
+  a.unshift(w);
+  if (a.length > KW_HIST_MAX) a = a.slice(0, KW_HIST_MAX);
+  kwHistCache = a;
+  try { localStorage.setItem('pk_kwhist', JSON.stringify(a)); } catch(e) {}
+  renderKwHist();
+}
+function kwHistClear(){
+  kwHistCache = [];
+  try { localStorage.removeItem('pk_kwhist'); } catch(e) {}
+  renderKwHist();
+  try { PK.toast('搜索历史已清空'); } catch(e) {}
+}
+/** 搜索页输入框下面那排"最近搜过" */
+function renderKwHist(){
+  var box = document.getElementById('kwHist');
+  if (!box) return;
+  var a = kwHist();
+  if (!a.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  var h = '<span class="lbl">最近搜过</span>';
+  for (var i = 0; i < a.length; i++) {
+    h += '<button class="kwchip" onclick="kwPick(' + jsa(a[i]) + ')">' + esc(a[i]) + '</button>';
+  }
+  h += '<button class="kwchip clr" onclick="kwHistClear()">清空</button>';
+  box.innerHTML = h;
+  box.style.display = '';
+}
 function previewWords(word){
   var w = String(word || '').trim().toLowerCase();
   if (!w) return [];
@@ -280,8 +335,14 @@ function previewWords(word){
     if (s.toLowerCase().indexOf(w) < 0) return;      // 只要"包含当前输入"的名字
     seen[s] = 1; out.push({ n: s, tag: tag });
   };
+  var kh = kwHist();                                  // ① 搜过的词优先(记忆)
+  for (i = 0; i < kh.length; i++) {
+    var s0 = String(kh[i] || '');
+    if (s0.toLowerCase().indexOf(w) < 0 || seen[s0] || out.length >= 8) continue;
+    seen[s0] = 1; out.push({ n: s0, tag: '历史' });
+  }
   var rs = (typeof allResults !== 'undefined' && allResults) ? allResults : [];
-  for (i = 0; i < rs.length; i++) push(rs[i].name, '本页');
+  for (i = 0; i < rs.length; i++) push(rs[i].name, '上次结果');
   var hs = histTitles();
   for (i = 0; i < hs.length; i++) push(hs[i], '记录');
   var hi = (typeof homeItems !== 'undefined' && homeItems) ? homeItems : [];
@@ -308,6 +369,8 @@ function kwPreview(){
   if (!box) return;
   var el = document.getElementById('kw');
   var w = el ? el.value : '';
+  var hb = document.getElementById('kwHist');
+  if (hb) hb.style.display = String(w || '').trim() ? 'none' : '';   // 打字时让联想接管
   kwTimer = setTimeout(function(){ drawPreview(box, w); }, 220);   // 220ms 防抖: 边打边算不心跳
 }
 function kwHomePreview(){
@@ -345,6 +408,7 @@ function doSearch(){
   var k = (document.getElementById('kw').value || '').trim();
   if (!k) { document.getElementById('kw').focus(); return; }
   lastSearchWord = k;
+  try { kwHistPush(k); } catch(e) {}          // 记忆: 搜过的词进历史
   document.getElementById('kw').value = '';   // 搜完就把输入框清空(用户要求: 别让上次搜的字一直留着)
   hideKwPrev();
   document.getElementById('searchTip').textContent = '正在并发搜索 ' + ((sites && sites.length) || 9) + ' 个源「' + k + '」, 结果边收边显示…';
@@ -361,6 +425,8 @@ function doSearch(){
 function onVodSearchPending(seq, n){
   if (seq && seq !== suSearchSeq) return;
   suSearchPending = n || 0;
+  if (n > 0) searchRunning = true;
+  if (n <= 0) searchRunning = false;
   var tip = document.getElementById('searchTip');
   if (!tip) return;
   if (suSearchPending <= 0) {
@@ -374,7 +440,7 @@ function onVodSearchPending(seq, n){
 
 /* ---------- 搜索结果: 源标签筛选 (替代之前堆叠分组) ---------- */
 var allResults = [], curSrcFilter = '';
-var suSearchSeq = 0, suSearchPending = 0;   // 当前搜索序号 / 还在搜的慢源(蜘蛛)个数
+var suSearchSeq = 0, suSearchPending = 0, searchRunning = false;   // 当前搜索序号 / 还在搜的慢源(蜘蛛)个数 / 是否有搜索在跑
 function onVodSearch(a, b){
   // 两种回调都认: 网页版是 onVodSearch(items); 安卓侧现在是 onVodSearch(seq, items) —— 带序号,
   // 这样"两次搜索的迟到回调"不会再互相串台(以前没有序号, 上一次的蜘蛛结果会灌进新搜索里)。
@@ -1644,11 +1710,28 @@ function renderVipPanel(){
   }
   h += '<span class="pw">没出直链时，用下面的线路解析：</span>';
   h += '<span class="pw">' + esc(ep ? (ep.page || ep.url) : '') + '</span>';
-  for (var j = 0; j < arr.length; j++) {
-    var L = arr[j];
+  // 战绩: 哪条真出过流、哪条出不来 —— 直接写在按钮上, 用户不用一条条瞎试
+  var order = [];
+  try { order = JSON.parse(PK.vipOrder()); } catch(e) { order = []; }
+  var byIdx = {};
+  for (var q = 0; q < arr.length; q++) byIdx[arr[q].i] = arr[q];
+  h += '<div class="skiprow" style="margin:8px 0">'
+    + '<button class="pbtn" onclick="vipAutoTry()">自动试（按战绩）</button>'
+    + '<button class="pbtn" onclick="vipTestAll()">自测全部</button></div>';
+  if (vipTest && vipTest.running) h += '<span class="pw">自测中 ' + vipTest.done + '/' + vipTest.total + ' · ' + esc(vipTest.cur) + '</span>';
+  var shown = [];
+  for (var oi = 0; oi < order.length; oi++) { var L2 = byIdx[order[oi]]; if (L2) shown.push(L2); }
+  for (var oj = 0; oj < arr.length; oj++) if (shown.indexOf(arr[oj]) < 0) shown.push(arr[oj]);
+  for (var j = 0; j < shown.length; j++) {
+    var L = shown[j];
+    var badge = (L.ok || L.fail)
+      ? ('<span class="pw">' + (L.ok ? ('✓ ' + L.ok + ' 次出流') : '') + (L.fail ? ((L.ok ? ' · ' : '') + '✗ ' + L.fail + ' 次没出') : '')
+         + (L.ms ? (' · ' + Math.round(L.ms / 1000) + 's') : '') + '</span>')
+      : '<span class="pw">未测过</span>';
     // 手机上没有 title 悬浮提示, 所以把"这条线的注意事项"直接写在按钮里
     h += '<button onclick="vipSniffEp(' + L.i + ')">' + esc(L.name)
       + (L.gate ? '（需宿主页）' : '')
+      + badge
       + (L.note ? '<span class="pw">' + esc(L.note) + '</span>' : '') + '</button>';
   }
   box.innerHTML = h;
@@ -1691,6 +1774,86 @@ function onRescueResolved(name, info, pageUrl, items){
     showGest('追剧源里没找到「' + name + '」这一集, 换个源吧');
     if (document.getElementById('pvipTip')) document.getElementById('pvipTip').textContent = '没找到页面';
   }
+}
+/* ---------------- 解析线路: 自动试 + 自测全部 ----------------
+ * 用户问"解析功能能不能修成真实可用": 这些第三方接口本来就有死有活, 我们能保证的是
+ *   ① 不用一条条手点 —— 按战绩自动试(出过流的先试); ② 一条不行自动换下一条;
+ *   ③ 面板上给出 ✓/✗ 战绩, 并可「自测全部」一次性摸清当下哪几条活。
+ */
+var vipTest = null;      // {running, order, i, done, total, cur, ok, fail, page, ck, timer, wait}
+
+function vipAutoTry(){
+  var ep = (curItem && curItem.eps) ? curItem.eps[curEp] : null;
+  if (!ep) { PK.toast('先播一集'); return; }
+  var page = ep.page || (isMediaUrl(ep.url) ? '' : ep.url);
+  if (!page) { PK.toast('这一集本身就是直链, 不需要解析线路'); return; }
+  var order = [];
+  try { order = JSON.parse(PK.vipOrder()); } catch(e) { order = []; }
+  if (!order.length) { PK.toast('没有可用线路'); return; }
+  vipRun(order, page, ep.cookie || '', 3, false);
+}
+function vipTestAll(){
+  var ep = (curItem && curItem.eps) ? curItem.eps[curEp] : null;
+  var page = ep ? (ep.page || (isMediaUrl(ep.url) ? '' : ep.url)) : '';
+  if (!page) { PK.toast('先播一集(或让这一集带着平台页面)'); return; }
+  var order = [];
+  try { order = JSON.parse(PK.vipOrder()); } catch(e) { order = []; }
+  vipRun(order, page, ep.cookie || '', order.length, true);
+}
+/** 依次试线路: max 条; test=true 时把没出流的也记进战绩(自测) */
+function vipRun(order, page, ck, max, test){
+  if (vipTest && vipTest.running) { PK.toast('正在试线路, 稍等'); return; }
+  var seq = order.slice(0, Math.max(1, Math.min(max, order.length)));
+  vipTest = { running: true, list: seq, i: 0, done: 0, total: seq.length, page: page, ck: ck, test: test,
+              ok: 0, fail: 0, names: [], timer: null, cur: '' };
+  showGest((test ? '自测线路 ' : '自动解析 ') + '1/' + seq.length + '…');
+  vipStep();
+}
+function vipStep(){
+  var V = vipTest;
+  if (!V || !V.running) return;
+  if (V.i >= V.list.length) { vipFinish(); return; }
+  var idx = V.list[V.i];
+  V.cur = vipName(idx);
+  var ep = (curItem && curItem.eps) ? curItem.eps[curEp] : null;
+  if (ep) {
+    var ck = V.ck || '';
+    sniffWant = { t: epToken(), page: V.page };
+    foundCount = 0; foundSeen = {};
+    platWant = { t: epToken(), page: V.page };
+    try { PK.vipSniff(idx, V.page, ck); } catch(e) { vipNext(false); return; }
+  }
+  showGest((V.test ? '自测 ' : '解析 ') + (V.i + 1) + '/' + V.list.length + '：' + V.cur);
+  clearTimeout(V.timer);
+  V.timer = setTimeout(function(){          // 一条最多等 22 秒(出流一般 5~20 秒)
+    try { PK.sniffStop(); } catch(e) {}
+    vipNext(false);
+  }, 22000);
+}
+function vipNext(ok){
+  var V = vipTest;
+  if (!V || !V.running) return;
+  clearTimeout(V.timer);
+  V.done++;
+  V.names.push(V.cur + (ok ? ' ✓' : ' ✗'));
+  if (ok) V.ok++; else V.fail++;
+  if (ok && !V.test) { vipFinish(); return; }     // 自动模式: 出流就收工(已经接上播了)
+  V.i++;
+  setTimeout(vipStep, 600);                        // 歇一下再下一条(嗅探页要重建)
+}
+function vipFinish(){
+  var V = vipTest;
+  if (!V) return;
+  V.running = false;
+  clearTimeout(V.timer);
+  showGest((V.test ? '自测完成: ' : '自动解析: ') + V.ok + ' 条出流 / 试了 ' + V.done + ' 条');
+  try { PK.toast((V.test ? '自测完成' : '解析完成') + '：' + V.names.join('  ')); } catch(e) {}
+  try { renderVipPanel(); } catch(e) {}
+  vipTest = null;
+}
+/** addFound 里调它: 某条线路出流了 */
+function vipNoticed(){
+  if (vipTest && vipTest.running) vipNext(true);
 }
 /** 用第 i 条 VIP 线路解析"当前这一集背后的平台页面" */
 function vipSniffEp(i){
@@ -3825,6 +3988,7 @@ function onLive(msg){
 var lastFoundAt = 0;
 function addFound(m){
   if (!m || !m.url) return;
+  try { vipNoticed(); } catch(e) {}          // 正在自动试/自测线路: 这一条出流了
   if (foundCount >= 40) return;                         // 兜底: 一轮嗅探最多收 40 条
   if (foundSeen[m.url]) return;
   foundSeen[m.url] = 1; foundCount++;
