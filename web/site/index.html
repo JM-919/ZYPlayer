@@ -589,6 +589,13 @@
         <button class="ghost mini" onclick="decAddLiveByUrl()">当直播源加入</button>
         <button class="ghost mini" onclick="showUserSites()">我的源</button>
         <button class="ghost mini" onclick="showUserLiveSources()">我的直播源</button></div>
+      <!-- 一键批处理(用户要求, 名字都四个字): 全部加入 / 全部自测 / 全部删除 —— 只作用于**当前解密结果**里的条目 -->
+      <div class="skiprow" id="decBatch" style="display:none;margin:2px 0 2px">
+        <button class="pbtn" onclick="decBatchAdd()">全部加入</button>
+        <button class="pbtn" onclick="decBatchTest()">全部自测</button>
+        <button class="pbtn" onclick="decBatchDel()">全部删除</button>
+        <span class="dim" id="decBatchNote" style="font-size:12px"></span>
+      </div>
       <!-- 测试关键词: 「加源/探测/蜘蛛自测」都拿它去真发一次搜索。以前写死"庆余年" -> 短剧频道永远过不了门槛,
            所以改成用户自己填; 留空 = 不做关键词搜索, 直接按"首页片单"验活(短剧/分类站这样也能加)。 -->
       <div class="skiprow" style="margin:6px 0 2px">

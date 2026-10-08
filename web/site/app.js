@@ -2213,13 +2213,32 @@ function fillQuality(){
     h += '<div class="qtitle">当前源（单码率）' + res + '</div>';
   }
   if (srcList.length > 1) {
-    h += '<div class="qtitle" style="margin-top:16px">线路切换（换源）</div>';
-    for (var j = 0; j < srcList.length; j++) {
-      h += '<button class="' + (j === srcIdx ? 'cur' : '') + '" onclick="switchLine(' + j + ')">'
-        + esc(srcList[j].siteName) + ' · ' + srcList[j].eps.length + '集'
+    // 线路列表也按来源分两组(用户要求"跟搜索一样分两组, 优雅点"):
+    // 自己加的 = TVBOX源, 内置 = CMS源; 组内**正在播的那个排最前**, 其余按集数从多到少。
+    var mineIdx = [], otherIdx = [];
+    for (var gj = 0; gj < srcList.length; gj++) (srcIsMine(srcList[gj].site) ? mineIdx : otherIdx).push(gj);
+    var lineBtn = function(ix){
+      var it = srcList[ix];
+      return '<button class="' + (ix === srcIdx ? 'cur' : '') + '" onclick="switchLine(' + ix + ')">'
+        + esc(it.siteName) + ' · ' + it.eps.length + '集'
         // 画面里带烧录广告的源如实标出来 —— 这种广告滤镜碰不到, 只能靠换源避开
-        + (srcList[j].burnAd ? ' ⚠ 画面烧录广告' : '') + '</button>';
-    }
+        + (it.burnAd ? ' ⚠ 画面烧录广告' : '') + '</button>';
+    };
+    var orderIn = function(list){
+      var out = [], rest = [];
+      for (var q = 0; q < list.length; q++) { if (list[q] === srcIdx) out.push(list[q]); else rest.push(list[q]); }
+      rest.sort(function(a, b){ return (srcList[b].eps || []).length - (srcList[a].eps || []).length; });
+      return out.concat(rest);
+    };
+    var section = function(list, label){
+      if (!list.length) return '';
+      var s = '<div class="qtitle" style="margin-top:16px">' + label + ' · ' + list.length + '</div>';
+      var ord = orderIn(list);
+      for (var q2 = 0; q2 < ord.length; q2++) s += lineBtn(ord[q2]);
+      return s;
+    };
+    h += '<div class="qtitle" style="margin-top:16px">线路切换（换源）</div>';
+    h += section(mineIdx, 'TVBOX源') + section(otherIdx, 'CMS源');
     h += '<div class="qtitle" style="margin-top:16px">还没找到别的?</div>';
     h += '<button onclick="requestMoreSources()">再搜一遍其它源</button>';
   } else {
@@ -2456,12 +2475,13 @@ function openPSet(){
 /** 自测: 把用户粘的候选源地址交给 Java 真测一次, 结果原样显示(含 UA/HTTP码/字符数/频道数/前 120 字) */
 
 /* ---------- TVBox 数据源配置: 解析(含解密) + 逐个真测 + 通过才加 ---------- */
-var scanLives = [], scanSpiders = [];
+var scanLives = [], scanSpiders = [], scanApis = [];
 function decRepaint(){ try { if (decLastJson) onDecrypt(decLastJson); } catch(e) {} }
 function onAddSite(name, jsonStr){
   var d = null;
   try { d = JSON.parse(jsonStr); } catch(e){}
   var msg = (d && d.msg) ? d.msg : '完了';
+  if (decBatchDoneItem(!!(d && d.ok))) return;      // 批处理中: 不逐个弹 toast, 只在进度行里数
   try { PK.toast((d && d.ok ? '✓ ' : '✗ ') + (name ? name + ': ' : '') + msg); } catch(e){}
   // 后端说"这个已经内置/已经加过"时, 说明它本来就能用 —— 把那一行直接变成「✓ 已加入」,
   // 否则用户再点一下又弹同一句, 就成了"添加一个后一直显示已添加"。
@@ -2552,6 +2572,13 @@ function tryUserSourceSearch(){
   doSearch();
 }
 function onSpiderTest(jsonStr){
+  var d0 = null;
+  try { d0 = JSON.parse(jsonStr); } catch(e) {}
+  if (decJob && decJob.kind === '自测') {           // 批处理自测: 不把原始回包糊到页面上, 只记成功与否
+    var okT = !!(d0 && d0.loaded && (String(d0.home || '').length > 8 || String(d0.search || '').length > 8));
+    decBatchDoneItem(okT);
+    return;
+  }
   var out = document.getElementById('decOut');
   var d = null;
   try { d = JSON.parse(jsonStr); } catch(e){}
@@ -3910,11 +3937,24 @@ function decLiveAdded(url){
   } catch(e) {}
   return false;
 }
-function decSpiderAdded(key){
-  var k = String(key || ''); if (!k) return false;
-  if (k.indexOf('csp_') !== 0) k = 'csp_' + k;
+/**
+ * 这个蜘蛛行加过没有?
+ * ★ 身份 = **key + ext**: 一个 jar 里的同一个类可以配很多个站点(用户那个短剧配置就是 35 个频道共用
+ *   `csp_XBPQ`, 靠 ext 指向各自的 json)。以前只比 key —— 点一条其他 34 条全变"已加入",
+ *   而且真正加第二条时会被 Java 判重拒掉("已经加过了"), 于是"加了却不显示"。
+ */
+function decSpiderAdded(key, ext){
+  var cls = String(key || '').replace(/^csp_/, '');
+  if (!cls) return false;
+  var want = String(ext == null ? '' : ext);
   var all = decUserSites();
-  for (var i = 0; i < all.length; i++) if (String(all[i].key || '') === k) return true;
+  for (var i = 0; i < all.length; i++) {
+    // 存量数据的类名: 新数据有 cls 字段; 老数据/带指纹的 key 形如 "csp_XBPQ#110cud" -> 取 # 前那段
+    var c2 = String(all[i].cls || '').replace(/^csp_/, '');
+    if (!c2) c2 = String(all[i].key || '').replace(/^csp_/, '').split('#')[0].split('@')[0];
+    if (c2 !== cls) continue;
+    if (String(all[i].ext == null ? '' : all[i].ext) === want) return true;
+  }
   return false;
 }
 /** 加过就画成不可点的「已加入」, 没加过才给「加入」按钮 */
@@ -3969,7 +4009,7 @@ function onDecrypt(jsonStr){
       h += '<div class="srcrow wide"><div class="sinfo">' + esc(sp[k].key) + ' ' + esc(sp[k].name || '')
         + (isRule ? ' <span class="sbad">规则</span>' : '')
         + '<br><span class="sapi">' + esc(sp[k].ext || '(无 ext)') + '</span></div>'
-        + decAddBtn(decSpiderAdded(sp[k].key), '加入(蜘蛛)', 'decAddSpider(' + k + ')')
+        + decAddBtn(decSpiderAdded(sp[k].key, sp[k].ext), '加入(蜘蛛)', 'decAddSpider(' + k + ')')
         + '<button class="pbtn" onclick="spiderTestNow(' + k + ')">自测</button>'
         + '<button class="pbtn" onclick="decCopy(' + jsa(sp[k].key + ' ' + (sp[k].ext || '')) + ')">复制</button></div>';
     }
@@ -3979,10 +4019,11 @@ function onDecrypt(jsonStr){
         + (d.spiderJarRaw && d.spiderJarRaw !== d.spiderJar ? ('<br>配置里写的是相对路径 ' + esc(d.spiderJarRaw) + '，已按配置地址解析成上面的绝对地址') : '')
         + '</div>';
     }
-    scanLives = lv; scanSpiders = sp;
+    scanLives = lv; scanSpiders = sp; scanApis = apis;
   }
   if (sp.length) { scanJar = sp[0].jar || d.spiderJar || ''; scanCls = String(sp[0].key).replace(/^csp_/, ''); scanExt = sp[0].ext || ''; }
   box.innerHTML = h;
+  try { decBatchShow(); } catch(e) {}
 }
 /**
  * 把"网页站地址"转成 App 能用的 JSON 采集接口：拿根域名试一组常见路径, 真返回片单才算探到。
@@ -3995,9 +4036,10 @@ function probeSite(){
   try { VOD.probeSiteUrl(v, decKw()); } catch(e){ document.getElementById('decOut').innerHTML = '<div class="pw">桥不可用: ' + esc(e) + '</div>'; }
 }
 function onProbeSite(jsonStr){
-  var box = document.getElementById('decOut');
   var d = null;
   try { d = JSON.parse(jsonStr); } catch(e){}
+  if (decJob && decJob.kind === '自测' && decJob.pending) { decBatchDoneItem(!!(d && d.ok)); return; }
+  var box = document.getElementById('decOut');
   if (!d) { box.innerHTML = '<div class="pw">结果解析不了</div>'; return; }
   if (!d.ok) {
     box.innerHTML = '<div class="pw">❌ 没探到采集接口</div>'
@@ -4033,10 +4075,150 @@ function decAddLive(i){
   decPendingLive = decNorm(L.url);
   try { PK.liveAddSource(L.name, L.url, L.ua || ''); } catch(e){ PK.toast('桥不可用: ' + e); }
 }
+/* ---------------- 一键批处理(名字四个字): 全部加入 / 全部自测 / 全部删除 ----------------
+ * 只作用于**当前这次解密结果**里的条目(采集接口 + 蜘蛛站点), 不碰别的源;
+ * 顺序执行、逐步报进度(蜘蛛每条都要真测, 一起并发会把网和 CPU 打满, 反而更慢)。
+ */
+var decJob = null;   // {kind, list, i, ok, fail, note}
+
+function decBatchNote(msg){
+  var el = document.getElementById('decBatchNote');
+  if (el) el.textContent = msg || '';
+}
+function decBatchShow(){
+  var row = document.getElementById('decBatch');
+  if (!row) return;
+  var has = (scanSpiders && scanSpiders.length) || (scanApis && scanApis.length);
+  row.style.display = has ? '' : 'none';
+}
+/** 当前解密结果里"还没加入"的条目(采集接口 + 蜘蛛), 供批处理用 */
+function decPendingJobs(){
+  var jobs = [];
+  for (var i = 0; i < (scanApis || []).length; i++) {
+    var a = scanApis[i];
+    if (!decSiteAdded(a.base, a.path)) jobs.push({t: 'api', i: i, name: a.name || '采集源'});
+  }
+  for (var j = 0; j < (scanSpiders || []).length; j++) {
+    var s = scanSpiders[j];
+    if (!decSpiderAdded(s.key, s.ext)) jobs.push({t: 'spider', i: j, name: s.name || s.key});
+  }
+  return jobs;
+}
+function decBatchRun(kind, jobs, one, done){
+  if (decJob) { try { PK.toast('上一批还没跑完'); } catch(e) {} return; }
+  if (!jobs.length) { decBatchNote(kind === 'del' ? '没有可删的' : '没有需要处理的条目'); return; }
+  decJob = { kind: kind, list: jobs, i: 0, ok: 0, fail: 0, one: one, done: done };
+  decBatchNote(kind + '中 0/' + jobs.length + '…');
+  decBatchStep();
+}
+function decBatchStep(){
+  var J = decJob;
+  if (!J) return;
+  if (J.i >= J.list.length) {
+    var n = J.list.length, ok = J.ok, bad = J.fail;
+    decBatchNote(J.kind + '完成: ' + ok + '/' + n + (bad ? ('（失败 ' + bad + '）') : ''));
+    var d = J.done; decJob = null;
+    try { PK.toast(J.kind + '完成: ' + ok + '/' + n + (bad ? ('，失败 ' + bad) : '')); } catch(e) {}
+    if (d) { try { d(ok, bad); } catch(e) {} }
+    return;
+  }
+  var item = J.list[J.i];
+  J.pending = true;
+  J.one(item);
+  if (!J.pending) { J.i++; setTimeout(decBatchStep, 40); return; }
+  setTimeout(function(){                       // 单个条目最多等 90 秒(蜘蛛要跑它自己的请求), 卡住就跳过
+    if (!decJob || decJob !== J || !J.pending) return;
+    J.pending = false; J.fail++; J.i++;
+    decBatchNote(J.kind + '中 ' + J.i + '/' + J.list.length + '…（有一条超时, 跳过）');
+    decBatchStep();
+  }, 90000);
+}
+/** 批处理: 某一条有结果了(由 onAddSite / onSpiderTest 调) */
+function decBatchDoneItem(ok){
+  var J = decJob;
+  if (!J || !J.pending) return false;
+  J.pending = false;
+  if (ok) J.ok++; else J.fail++;
+  J.i++;
+  decBatchNote(J.kind + '中 ' + J.i + '/' + J.list.length + '…');
+  setTimeout(decBatchStep, 40);
+  return true;
+}
+function decBatchAdd(){
+  var jobs = decPendingJobs();
+  decBatchRun('加入', jobs, function(it){
+    if (it.t === 'api') {
+      var a = scanApis[it.i];
+      decAddSite({ k: a.base.replace(/[^a-z0-9]/gi, '').slice(0, 10), n: a.name, b: a.base, p: a.path });
+    } else decAddSpider(it.i);
+  });
+}
+function decBatchTest(){
+  var jobs = [];
+  for (var j = 0; j < (scanSpiders || []).length; j++) jobs.push({t: 'spider', i: j, name: scanSpiders[j].name || scanSpiders[j].key});
+  for (var i = 0; i < (scanApis || []).length; i++) jobs.push({t: 'api', i: i, name: scanApis[i].name || '采集源'});
+  decBatchRun('自测', jobs, function(it){
+    if (it.t === 'api') {
+      var a = scanApis[it.i];
+      try { VOD.probeSiteUrl(a.base, decKw()); } catch(e) { decBatchDoneItem(false); }
+    } else {
+      var s = scanSpiders[it.i];
+      try { VOD.spiderTest(scanJar || s.jar, String(s.key).replace(/^csp_/, ''), s.ext, decKw()); }
+      catch(e) { decBatchDoneItem(false); }
+    }
+  });
+}
+function decBatchDel(){
+  // 删的是"当前解密结果里、已经加进来的"那些源(按 key+ext 对上), 不碰别的
+  var jobs = [];
+  var my = decUserSites();
+  for (var i = 0; i < (scanApis || []).length; i++) {
+    var a = scanApis[i];
+    if (decSiteAdded(a.base, a.path)) jobs.push({t: 'api', i: i, name: a.name || '采集源'});
+  }
+  for (var j = 0; j < (scanSpiders || []).length; j++) {
+    var s = scanSpiders[j];
+    if (decSpiderAdded(s.key, s.ext)) jobs.push({t: 'spider', i: j, name: s.name || s.key});
+  }
+  if (!jobs.length) { decBatchNote('没有可删的(这次解出来的源都还没加)'); return; }
+  if (!decDelArmed) {          // 二次确认: 再点一次才真删(WebView 里的 confirm() 不一定弹得出来)
+    decDelArmed = true;
+    decBatchNote('再点一次「全部删除」确认删除这 ' + jobs.length + ' 个源');
+    setTimeout(function(){ decDelArmed = false; }, 4000);
+    return;
+  }
+  decDelArmed = false;
+  decBatchRun('删除', jobs, function(it){
+    var s = it.t === 'spider' ? scanSpiders[it.i] : scanApis[it.i];
+    var key = null;
+    for (var q = 0; q < decUserSites().length; q++) {
+      var u = decUserSites()[q];
+      var sameKey = it.t === 'spider'
+        ? (String(u.key || '').indexOf('csp_') === 0 && decSpiderAdded(s.key, s.ext) && String(u.ext == null ? '' : u.ext) === String(s.ext == null ? '' : s.ext))
+        : (decSiteAdded(s.base, s.path) && decNorm((u.api || '') + (u.path || '')) === decNorm((s.base || '') + (s.path || '')));
+      if (sameKey) { key = u.key; break; }
+    }
+    if (!key) { decBatchDoneItem(false); return; }
+    try { VOD.delSite(key); } catch(e) { decBatchDoneItem(false); }
+  });
+}
+var decDelArmed = false;
+
 function decAddSpider(i){
   var s = scanSpiders[i];
   if (!s) return;
-  try { VOD.addSpiderSite(s.key, s.name, scanJar || s.jar, s.ext, decKw()); } catch(e){ PK.toast('桥不可用: ' + e); }
+  // key 必须唯一: 同一个类的第 2..N 个频道要带 ext 指纹(类名单独传, Java 不会去猜)
+  var cls = String(s.key || '').replace(/^csp_/, '');
+  var base = 'csp_' + cls;
+  var key = (s.ext ? (base + '#' + decExtSig(s.ext)) : base);
+  try { VOD.addSpiderSite(key, s.name, scanJar || s.jar, s.ext, decKw(), cls); }
+  catch(e){ PK.toast('桥不可用: ' + e); }
+}
+/** ext 的短指纹(同类的不同频道靠它区分 key; 只用于身份, 不参与请求) */
+function decExtSig(ext){
+  var s = String(ext || ''), h = 5381;
+  for (var i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
+  return h.toString(36).slice(0, 6);
 }
 /** 上次崩溃的堆栈(Java 启动时推过来)。 */
 function showCrash(t){
