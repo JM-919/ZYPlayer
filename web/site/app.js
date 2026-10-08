@@ -7,9 +7,7 @@ function isWeb(){ try { return !!(window.PK && PK.web); } catch(e){ return false
 var curItem = null, curEp = 0, hls = null;
 /* 首页与搜索各自一份数据源：曾共用 lastItems，导致"搜完再回首页点卡片 = 打开搜索结果" */
 var homeItems = [], searchItems = [];
-var suSeq = 0, suSkipOnce = false;            // 短剧搜索: 请求序号 + "这一跳不要再搜短剧"标志
 function listOf(which){                                   // 各页面各自的数据数组
-  if (which === "suanju") return suanjuItems;               // 短剧页(条目无 site/id -> 点开按片名搜)
   return which === "search" ? searchItems : homeItems;
 }
 
@@ -40,7 +38,7 @@ function showList(){
       if (out.length) return out;
     }
   } catch (e) {}
-  return ["v-home","v-search","v-detail","v-update","v-live","v-hist","v-crash","v-dec","v-suanju"];
+  return ["v-home","v-search","v-detail","v-update","v-live","v-hist","v-crash","v-dec"];
 }
 function show(v){
   // 播放器是 position:fixed + z-index:50, 切页面时如果不关掉会把整屏盖住
@@ -353,24 +351,15 @@ function doSearch(){
   document.getElementById('searchGrid').innerHTML = '';
   var sc = document.getElementById('srcChips');
   if (sc) { sc.innerHTML = ''; sc.style.display = 'none'; }
-  allResults = []; suResults = []; curSrcFilter = '';   // 新搜索: 源筛选回到"全部", 短剧结果也清空
+  allResults = []; curSrcFilter = '';   // 新搜索: 源筛选回到"全部"
   VOD.search(k);
-  // 短剧源也一起搜(用户要求: 搜索要能搜到短剧源)。从短剧条目点进来时 suSkipOnce=true, 跳过,
-  // 否则"点短剧结果 -> 又只搜出短剧"会打转。
-  if (!suSkipOnce) { try { suSeq++; PK.suanjuSearch(k, suSeq); } catch(e) {} }
-  suSkipOnce = false;
 }
 
 
 /* ---------- 搜索结果: 源标签筛选 (替代之前堆叠分组) ---------- */
 var allResults = [], curSrcFilter = '';
-/* 短剧源的结果单独存: VOD 搜索是"边收边显示"、每次回调都会**整体替换** allResults,
-   以前把短剧结果 push 进 allResults, 下一批点播结果一到就被冲掉 —— 这就是"搜索里看不到短剧源"的原因。 */
-var suResults = [];
-function mergedResults(){ return allResults.concat(suResults); }
 function onVodSearch(items){
   allResults = items || [];
-  items = mergedResults();          // 计数/文案/渲染都用"点播 + 短剧"的合并结果
   // 这里**不能**清 curSrcFilter: Java 是"边收边显示", 一次搜索会回调好几次,
   // 每次清一下就把用户刚点的源筛选抹掉了(新搜索开始时才重置, 见 doSearch)
   var tip = document.getElementById('searchTip');
@@ -414,7 +403,7 @@ function filterSrc(k){
   renderSearch();
 }
 function renderSearch(){
-  var list = [], src = mergedResults();
+  var list = [], src = allResults;
   for (var i = 0; i < src.length; i++) {
     if (curSrcFilter && (src[i].siteName || '未知') !== curSrcFilter) continue;
     src[i]._idx = list.length;
@@ -443,7 +432,6 @@ function openDetail(which, i){
   if (!it) return;
   // 豆瓣榜单项只有片名/海报/评分, **没有源信息**: 按片名去聚合搜索, 收到同名结果就自动进详情
   if (!it.site || !it.id) {
-    suSkipOnce = !!it.su;            // 短剧条目 -> 这次只搜点播源, 免得又只搜出短剧自己
     pendingOpenName = it.name;
     openSearch();
     var kwb = document.getElementById('kw');
@@ -868,159 +856,6 @@ function clearHistory(){
   renderHistoryFull();
   PK.toast('已清空 ' + n + ' 条观看记录');
 }
-/* ---------- 短剧页: 收拢 guoapp(红果鉴) 的短剧源 ----------
- * 条目只有片名/海报/备注(site/id 为空) —— 点开时复用 openDetail() 里那条"按片名去聚合搜索"的
- * 既有链路(和豆瓣首页完全一致), 所以这一页不需要新的详情/播放实现, 也不会动原有逻辑。
- */
-var suanjuItems = [], suanjuKey = '', suanjuPage = 1, suanjuSeq = 0, suanjuSrcCache = null;
-var suanjuRoute = '', suanjuRtCache = null;
-function suanjuSourcesList(){
-  if (suanjuSrcCache) return suanjuSrcCache;
-  suanjuSrcCache = [];
-  try { suanjuSrcCache = JSON.parse(PK.suanjuSources()) || []; } catch(e) { suanjuSrcCache = []; }
-  return suanjuSrcCache;
-}
-/** 某个源的分类/榜单标签(原生给清单; 网页版由 bridge.js 给同一份; 都没有时只有"首页") */
-function suanjuRoutesList(key){
-  if (!suanjuRtCache) {
-    suanjuRtCache = [];
-    try { if (PK.suanjuRoutes) suanjuRtCache = JSON.parse(PK.suanjuRoutes()) || []; } catch(e) { suanjuRtCache = []; }
-  }
-  var out = [];
-  for (var i = 0; i < suanjuRtCache.length; i++) if (suanjuRtCache[i].key === key) out.push(suanjuRtCache[i]);
-  if (!out.length) out = [{ key: key, title: '首页' }];
-  return out;
-}
-function suanjuRouteName(){
-  var rs = suanjuRoutesList(suanjuKey), i;
-  for (i = 0; i < rs.length; i++) if (rs[i].title === suanjuRoute) return suanjuRoute;
-  suanjuRoute = rs[0].title;
-  return suanjuRoute;
-}
-/** 当前标签能不能翻页(榜单只有一页; 原生/网页给 paged 字段, 没给就按"能翻"处理) */
-function suanjuRoutePaged(){
-  var rs = suanjuRoutesList(suanjuKey), cur = suanjuRouteName();
-  for (var i = 0; i < rs.length; i++) if (rs[i].title === cur) return rs[i].paged !== false;
-  return true;
-}
-function showSuanju(){
-  show('v-suanju');
-  var list = suanjuSourcesList();
-  if (!suanjuKey) { for (var i = 0; i < list.length; i++) if (list[i].on) { suanjuKey = list[i].key; break; } }
-  fillSuanjuSrc();
-  loadSuanju(1);
-}
-function fillSuanjuSrc(){
-  var box = document.getElementById('suanjuSrc');
-  var note = document.getElementById('suanjuSrcNote');
-  if (!box) return;
-  var list = suanjuSourcesList(), h = '', off = [];
-  for (var i = 0; i < list.length; i++) {
-    var s = list[i];
-    h += '<button type="button" class="sjchip' + (s.key === suanjuKey ? ' on' : '') + (s.on ? '' : ' off') + '"'
-      + ' data-key="' + esc(s.key) + '"' + (s.on ? ' onclick="pickSuanju(this)"' : ' disabled')
-      + ' title="' + esc(s.status || '') + '">' + esc(s.name) + '</button>';
-    if (!s.on) off.push(esc(s.name) + '(' + esc(s.status || '') + ')');
-  }
-  box.innerHTML = h;
-  if (note) note.textContent = off.length ? ('未接入: ' + off.join(' · ')) : '';
-  fillSuanjuRoute();
-}
-/** 分类/榜单一行: 只有一条(如鬼片/韩小圈的"最新")时不占地方, 直接隐藏 */
-function fillSuanjuRoute(){
-  var box = document.getElementById('suanjuRoute');
-  if (!box) return;
-  var rs = suanjuRoutesList(suanjuKey), cur = suanjuRouteName(), h = '';
-  if (rs.length < 2) { box.style.display = 'none'; box.innerHTML = ''; return; }
-  for (var i = 0; i < rs.length; i++) {
-    h += '<button type="button" class="sjchip rt' + (rs[i].title === cur ? ' on' : '') + '" data-rt="' + esc(rs[i].title) + '"'
-      + ' onclick="pickSuanjuRoute(this)">' + esc(rs[i].title) + '</button>';
-  }
-  box.innerHTML = h;
-  box.style.display = '';
-}
-function pickSuanjuRoute(el){
-  var t = el && el.getAttribute('data-rt');
-  if (!t || t === suanjuRoute) return;
-  suanjuRoute = t;
-  fillSuanjuRoute();
-  loadSuanju(1);
-}
-function pickSuanju(el){
-  var k = el && el.getAttribute('data-key');
-  if (!k) return;
-  suanjuKey = k;
-  suanjuRoute = '';                 // 换源就把标签归位到该源的第一条
-  fillSuanjuSrc();
-  loadSuanju(1);
-}
-function loadSuanju(force){
-  if (!suanjuKey) return;
-  if (force) { suanjuPage = 1; suanjuItems = []; }
-  var grid = document.getElementById('suanjuGrid'), more = document.getElementById('suanjuMore');
-  if (grid && force) grid.innerHTML = skeleton(6);
-  if (more) more.textContent = '加载中…';
-  var seq = ++suanjuSeq, rt = suanjuRouteName();
-  try {
-    if (PK.suanjuRoute) PK.suanjuRoute(suanjuKey, rt, suanjuPage, seq);
-    else PK.suanju(suanjuKey, suanjuPage, seq);
-  }
-  catch (e) { if (more) more.textContent = '这一版没接短剧接口'; }
-}
-function moreSuanju(){
-  if (!suanjuRoutePaged()) return;          // 榜单/最新类只有一页, 点了也是同一批, 干脆不动
-  suanjuPage++;
-  loadSuanju(false);
-}
-/** 短剧搜索回来了: 并进搜索结果(带来源名, 会被源筛选条识别成独立一栏)。 */
-function onSuanjuSearch(seq, items){
-  if (seq !== suSeq) return;
-  suResults = items || [];
-  for (var i = 0; i < suResults.length; i++) suResults[i].su = 1;
-  suanjuFillPosters(suResults);
-  // 合并后重画: 点播结果(可能还在陆续到) + 短剧结果
-  try { onVodSearch(allResults); } catch (e) { try { renderSearch(); } catch (e2) {} }
-}
-
-/** 没有海报的短剧条目: 借豆瓣按片名取封面(鬼片那站已经下线, RSS 里没有封面) */
-function suanjuFillPosters(items){
-  try {
-    var names = [], i;
-    for (i = 0; i < items.length && names.length < 12; i++) {
-      if (items[i] && items[i].su && !items[i].pic && items[i].name && !doubanOf(items[i].name)) names.push(items[i].name);
-    }
-    if (names.length) PK.douban(JSON.stringify(names), names.length);
-  } catch (e) {}
-}
-
-function onSuanju(seq, items){
-  if (seq !== suanjuSeq) return;                 // 迟到的旧响应丢掉(与首页同一套 seq 约定)
-  items = items || [];
-  for (var q = 0; q < items.length; q++) items[q].su = 1;   // 页内条目也标成短剧条目(点开时只搜点播源)
-  if (suanjuPage === 1) {
-    suanjuItems = items;
-  } else {
-    // 榜单类路由没有下一页, 再点"更多"会回同一批 —— 按片名去重, 免得同一部戏列两遍
-    var seen = {}, i;
-    for (i = 0; i < suanjuItems.length; i++) seen[suanjuItems[i].name] = 1;
-    for (i = 0; i < items.length; i++) {
-      if (seen[items[i].name]) continue;
-      seen[items[i].name] = 1;
-      suanjuItems.push(items[i]);
-    }
-  }
-  var grid = document.getElementById('suanjuGrid'), more = document.getElementById('suanjuMore');
-  if (grid) renderGrid(grid, suanjuItems, 0, 'suanju');
-  suanjuFillPosters(suanjuItems);
-  if (more) {
-    var src = suanjuSourcesList().filter(function (x) { return x.key === suanjuKey; })[0] || {};
-    var nm = (src.name || suanjuKey) + (suanjuRoute && suanjuRoute !== '首页' ? (' · ' + suanjuRoute) : '');
-    more.textContent = suanjuItems.length
-      ? ('— ' + nm + ' · 共 ' + suanjuItems.length + ' 部,' + (suanjuRoutePaged() ? ' 点这里加载更多 —' : ' —'))
-      : ('— ' + nm + ' 暂时没有取到片单' + (src.status ? ('(' + src.status + ')') : '') + ' —');
-  }
-}
-
 /* ---------- 观看记录管理页 ---------- */
 function openHistory(){
   show('v-hist');
@@ -1333,6 +1168,7 @@ function castAddHost(){
   var el = document.getElementById('castHost');
   var v = (el && el.value || '').trim();
   if (!v) { PK.toast('填一下电视 IP'); return; }
+  if (el) el.value = '';                       // 不清空的话再点一次还是同一个 IP, 会一直弹「已添加」(真机上就是这么撞见的)
   PK.toast('正在连接 ' + v + ' …');
   try { PK.castAdd(v); } catch(e){}
 }
@@ -2534,12 +2370,21 @@ function openPSet(){
 
 /* ---------- TVBox 数据源配置: 解析(含解密) + 逐个真测 + 通过才加 ---------- */
 var scanLives = [], scanSpiders = [];
+function decRepaint(){ try { if (decLastJson) onDecrypt(decLastJson); } catch(e) {} }
 function onAddSite(name, jsonStr){
   var d = null;
   try { d = JSON.parse(jsonStr); } catch(e){}
   var msg = (d && d.msg) ? d.msg : '完了';
   try { PK.toast((d && d.ok ? '✓ ' : '✗ ') + (name ? name + ': ' : '') + msg); } catch(e){}
+  // 后端说"这个已经内置/已经加过"时, 说明它本来就能用 —— 把那一行直接变成「✓ 已加入」,
+  // 否则用户再点一下又弹同一句, 就成了"添加一个后一直显示已添加"。
+  if (!(d && d.ok) && decPendingSite && /已经内置|已经加过|不用再加/.test(msg)) {
+    decKnown[decPendingSite] = 1;
+    decPendingSite = '';
+    decRepaint();
+  } else if (d && d.ok) { decPendingSite = ''; }
   if (d && d.ok) {
+    decRepaint();          // 那一条(以及配置里重复出现的同一条)立刻变成「✓ 已加入」, 不用再点一次
     // 源列表没有下拉框(界面里不选源, 聚合搜索会自动带上): 只要刷新内存里的列表,
     // 当前源还在就保持不动, 不在(第一次加源)就用第一个
     try { sites = JSON.parse(VOD.sites()); } catch(e){}
@@ -2686,6 +2531,11 @@ function onSpiderPlay(key, jsonStr){
 function onLiveAddSource(name, jsonStr){
   var d = null;
   try { d = JSON.parse(jsonStr); } catch(e){}
+  if (d && d.ok) decRepaint();     // 直播表那一条同样立刻变「✓ 已加入」
+  else if (decPendingLive && d && /已经加过|已经内置/.test(d.msg || '')) {
+    decKnown[decPendingLive] = 1; decPendingLive = ''; decRepaint();
+  }
+  if (d && d.ok) decPendingLive = '';
   try { PK.toast((d && d.ok ? '✓ ' : '✗ ') + (d && d.msg ? d.msg : '完了')); } catch(e){}
 }
 /** 我的直播源: 列出用户自己加的直播表, 可删; 加完点「刷新列表」就能看到里面的频道 */
@@ -3867,6 +3717,7 @@ function setUrl(u){
 var decRaw = '', decJson = '';
 function showDecrypt(){ if (isWeb()) return;   // 网页端: 解密出来的源大多靠蜘蛛/嗅探, 没意义
   show('v-dec'); }
+var decLastJson = '';   // 上一次解析结果: 加完源按真实列表重画用
 function decClear(){ var t=document.getElementById('decIn'); if(t) t.value=''; document.getElementById('decOut').innerHTML=''; }
 function decPaste(){
   try { var c = VOD.clipText ? VOD.clipText() : ''; if (c) { document.getElementById('decIn').value = c; PK.toast('已粘贴'); } else PK.toast('剪贴板空的'); }
@@ -3881,6 +3732,55 @@ function decGo(){
     else VOD.decryptText(v);
   } catch(e){ document.getElementById('decOut').innerHTML = '<div class="pw">桥不可用: ' + esc(e) + '</div>'; }
 }
+/**
+ * 解密页「加入」按钮的状态。**关键: 状态不看 JS 记的标志位, 每次渲染都拿真实源列表比对** ——
+ * 这样"加过的那一条"才显示已加入(同一条接口在配置里重复出现时也一起显示), 删掉源之后又自动变回「加入」。
+ * 之前没有任何状态: 加完按钮还是「加入影视源」, 再点就弹「已经加过这个源了」, 看着像"添加了一个却一直说已添加"。
+ */
+/**
+ * 与后端 `Vod.norm()` **逐字一致**的归一化: 去空白、转小写、去掉一个结尾斜杠、去掉协议头。
+ * 为什么必须一致: "加没加过"最终是后端按这个口径判的, 界面只是照它显示 —— 口径不同就会出现
+ * "按钮说没加、后端说已加过"的反复提示。(注意后端不合并重复斜杠, 这里也照做: base 带尾斜杠 +
+ * path 带前斜杠时两边都会得到双斜杠, 判定仍然一致。)
+ */
+function decNorm(u){
+  var s = String(u || '').replace(/\s+/g, '').toLowerCase();
+  if (s.length > 1 && s.charAt(s.length - 1) === '/') s = s.substring(0, s.length - 1);
+  return s.replace(/https:\/\//g, '').replace(/http:\/\//g, '');
+}
+function decUserSites(){
+  try { return JSON.parse(VOD.userSites()) || []; } catch(e) { return []; }
+}
+var decKnown = {};        // 后端明确回过"已经内置/已经加过"的地址: 直接按已加入显示, 不再重复弹同一句
+var decPendingSite = '', decPendingLive = '';
+function decSiteAdded(base, path){
+  var want = decNorm(base + (path || '')); if (!want) return false;
+  if (decKnown[want]) return true;
+  var all = decUserSites();
+  for (var i = 0; i < all.length; i++) if (decNorm((all[i].api || '') + (all[i].path || '')) === want) return true;
+  return false;
+}
+function decLiveAdded(url){
+  var want = decNorm(url); if (!want) return false;
+  if (decKnown[want]) return true;
+  try {
+    var all = JSON.parse(PK.liveUserSources()) || [];
+    for (var i = 0; i < all.length; i++) if (decNorm(all[i].url) === want) return true;
+  } catch(e) {}
+  return false;
+}
+function decSpiderAdded(key){
+  var k = String(key || ''); if (!k) return false;
+  if (k.indexOf('csp_') !== 0) k = 'csp_' + k;
+  var all = decUserSites();
+  for (var i = 0; i < all.length; i++) if (String(all[i].key || '') === k) return true;
+  return false;
+}
+/** 加过就画成不可点的「已加入」, 没加过才给「加入」按钮 */
+function decAddBtn(added, label, onclick){
+  return added ? ('<button class="pbtn" disabled style="opacity:.55">✓ 已加入</button>')
+               : ('<button class="pbtn" onclick="' + onclick + '">' + label + '</button>');
+}
 function onDecrypt(jsonStr){
   var box = document.getElementById('decOut');
   var d = null;
@@ -3893,7 +3793,7 @@ function onDecrypt(jsonStr){
       + (d.head ? ('<pre style="white-space:pre-wrap;font-size:11px">' + esc(d.head) + '</pre>') : '');
     return;
   }
-  decRaw = d.json || ''; decJson = jsonStr;
+  decRaw = d.json || ''; decJson = jsonStr; decLastJson = jsonStr;   // 加完源就按真实列表重画这一页
   var h = '<div class="pw">✅ 解开了　形态 <b>' + esc(d.shape || '明文') + '</b>'
     + (d.encrypted ? ('　🔑 口令 <b>' + esc(d.pw) + '</b>　IV <b>' + esc(d.iv) + '</b>') : '')
     + (d.lenient ? '　（配置里有重复键，容错模式，站点数未知）' : '')
@@ -3907,14 +3807,15 @@ function onDecrypt(jsonStr){
   for (var i = 0; i < apis.length; i++) {
     var a = apis[i], u = a.base + a.path;
     h += '<div class="srcrow"><div class="sinfo">' + esc(a.name || '源') + '<br><span class="sapi">' + esc(a.raw) + '</span></div>'
-      + '<button class="pbtn" onclick="decAddSite(' + jsa(JSON.stringify({k: a.base.replace(/[^a-z0-9]/gi, '').slice(0, 10), n: a.name, b: a.base, p: a.path})) + ')">加入影视源</button>'
+      + decAddBtn(decSiteAdded(a.base, a.path), '加入影视源',
+          'decAddSite(' + jsa(JSON.stringify({k: a.base.replace(/[^a-z0-9]/gi, '').slice(0, 10), n: a.name, b: a.base, p: a.path})) + ')')
       + '<button class="pbtn" onclick="decCopy(' + jsa(u) + ')">复制</button></div>';
   }
   h += '<div class="pw">📺 直播表（' + lv.length + '）—— 加进来会先真拉一次、解析出频道才收：</div>';
   for (var j = 0; j < lv.length; j++) {
     h += '<div class="srcrow wide"><div class="sinfo">' + esc(lv[j].name || '直播') + '<br><span class="sapi">' + esc(lv[j].url)
       + (lv[j].ua ? ('  · UA ' + esc(lv[j].ua)) : '') + '</span></div>'
-      + '<button class="pbtn" onclick="decAddLive(' + j + ')">加入直播源</button>'
+      + decAddBtn(decLiveAdded(lv[j].url), '加入直播源', 'decAddLive(' + j + ')')
       + '<button class="pbtn" onclick="decCopy(' + jsa(lv[j].url) + ')">复制</button></div>';
   }
   if (!WEB) {
@@ -3927,7 +3828,7 @@ function onDecrypt(jsonStr){
       h += '<div class="srcrow wide"><div class="sinfo">' + esc(sp[k].key) + ' ' + esc(sp[k].name || '')
         + (isRule ? ' <span class="sbad">规则</span>' : '')
         + '<br><span class="sapi">' + esc(sp[k].ext || '(无 ext)') + '</span></div>'
-        + '<button class="pbtn" onclick="decAddSpider(' + k + ')">加入(蜘蛛)</button>'
+        + decAddBtn(decSpiderAdded(sp[k].key), '加入(蜘蛛)', 'decAddSpider(' + k + ')')
         + '<button class="pbtn" onclick="spiderTestNow(' + k + ')">自测</button>'
         + '<button class="pbtn" onclick="decCopy(' + jsa(sp[k].key + ' ' + (sp[k].ext || '')) + ')">复制</button></div>';
     }
@@ -3981,8 +3882,16 @@ function decAddLiveByUrl(){
   try { PK.liveAddSource('自加直播源', u, u.indexOf('.nzk') >= 0 ? 'Goiptv/8.8.8' : ''); } catch(e){ PK.toast('桥不可用: ' + e); }
 }
 function decCopy(s){ try { VOD.copyText(s || ''); } catch(e){ try { PK.toast('复制失败'); } catch(e2){} } }
-function decAddSite(o){ try { VOD.addSite(o.k, o.n, o.b, o.p); } catch(e){ PK.toast('桥不可用: ' + e); } }
-function decAddLive(i){ var L = scanLives[i]; if (L) try { PK.liveAddSource(L.name, L.url, L.ua || ''); } catch(e){ PK.toast('桥不可用: ' + e); } }
+function decAddSite(o){
+  decPendingSite = decNorm((o && o.b || '') + (o && o.p || ''));   // 供 onAddSite 判断"是这一条已经有了"
+  try { VOD.addSite(o.k, o.n, o.b, o.p); } catch(e){ PK.toast('桥不可用: ' + e); }
+}
+function decAddLive(i){
+  var L = scanLives[i];
+  if (!L) return;
+  decPendingLive = decNorm(L.url);
+  try { PK.liveAddSource(L.name, L.url, L.ua || ''); } catch(e){ PK.toast('桥不可用: ' + e); }
+}
 function decAddSpider(i){
   var s = scanSpiders[i];
   if (!s) return;

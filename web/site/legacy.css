@@ -88,18 +88,6 @@
   .tag{display:inline-block;font-size:11px;padding:1px 8px;border-radius:99px;background:linear-gradient(180deg, rgba(255,255,255,.095), rgba(255,255,255,.038));color:#93a1b8;
     margin-right:6px;border:1px solid rgba(255,255,255,.125);}
   
-  #suanjuSrc{display:-webkit-box;display:-webkit-flex;display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;-webkit-flex-wrap:wrap;-webkit-flex-wrap:wrap;flex-wrap:wrap;gap:6px;margin:0 0 12px;}
-  .sjchip{padding:7px 10px;border-radius:9px;background:linear-gradient(180deg, rgba(255,255,255,.095), rgba(255,255,255,.038));color:#eef3fb;border:1px solid rgba(255,255,255,.125);
-    font-size:12.5px;cursor:pointer;}
-  .sjchip.on{background:#22c55e;color:#07120a;font-weight:600;border-color:transparent;}
-  .sjchip.off{opacity:.42;cursor:default;}
-  #suanjuSrcNote{margin:-6px 0 10px;font-size:12px;color:#93a1b8;}
-  
-  #suanjuRoute{display:-webkit-box;display:-webkit-flex;display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;-webkit-flex-wrap:wrap;-webkit-flex-wrap:wrap;flex-wrap:wrap;gap:6px;margin:-6px 0 12px;}
-  .sjchip.rt{background:transparent;border-color:rgba(255,255,255,.125);color:#93a1b8;padding:5px 9px;font-size:12px;}
-  .sjchip.rt.on{background:linear-gradient(180deg, rgba(255,255,255,.095), rgba(255,255,255,.038));color:#eef3fb;font-weight:600;border-color:#22c55e;}
-
-  
   
   html.web main{padding:14px 16px 56px;}
   html.web #main section{width:100%;max-width:1080px;margin:0 auto;}
