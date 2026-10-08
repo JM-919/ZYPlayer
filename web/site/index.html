@@ -94,6 +94,14 @@
   #srcChips .srclist button .n{flex:none;color:var(--dim);font-weight:400;font-size:11.5px;}
   #srcChips .srclist button.on{background:linear-gradient(180deg,#3ddc7f,#1fa855);color:#04120a;border-color:transparent;}
   #srcChips .srclist button.on .n{color:#04120a;}
+  /* 通用抽屉(用户要求"优雅点, 别一排到底"): 头行一行 + 展开区(内部纵向滚动) ——
+     解密结果的三段、TVBOX源列表都用它; 与搜索结果的源筛选同一个观感。 */
+  .drw{margin:8px 0;}
+  .drwh{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:var(--g1);color:var(--fg);
+    font-weight:600;font-size:13px;border:1px solid var(--hair);border-radius:10px;padding:9px 12px;}
+  .drwh .cnt{margin-left:auto;color:var(--dim);font-weight:400;font-size:12px;}
+  .drwb{display:none;margin-top:8px;max-height:52vh;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+  .drw.open .drwb{display:block;}
   /* 换源/详情里的小组标题(与搜索抽屉同款观感) */
   .srclbl{font-size:11.5px;color:var(--dim);margin:2px 0 4px 2px;letter-spacing:.02em;}
   .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}

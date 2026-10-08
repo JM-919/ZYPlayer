@@ -2513,13 +2513,14 @@ function showUserSites(){
     return;
   }
   // 加进来怎么用, 直接写在面板上(用户问过"添加了怎么使用")
-  var h = '<div class="pw">自己加的源（' + list.length + ' 个）已经生效，三种用法都不用手动选源：<br>'
+  var intro = '<div class="pw">已经生效，三种用法都不用手动选源：<br>'
     + '① <b>搜索</b>：点搜索时所有源并发搜（含你加的），结果右上角能按源名筛选；<br>'
     + '② <b>详情/播放</b>：这部片在当前源拿不到直链时，会自动去你加的源里找同名的；<br>'
     + '③ <b>首页</b>：当前源没数据时会优先用它兜底。<br>'
     + '加完不用重启，退出设置就能用。</div>'
     + '<button class="pbtn" onclick="tryUserSourceSearch()">搜一部片试试</button>'
     + '<div style="height:6px"></div>';
+  var h = intro;
   // 蜘蛛源预载进度(打开 App 就静默在跑): 让用户看得见"正在预热/已完成", 并可手动重来一遍
   try {
     var warm = JSON.parse(PK.spiderWarm());
@@ -2540,16 +2541,21 @@ function showUserSites(){
         + '<br><button class="pbtn" onclick="reWarmSpiders()">重新预载</button></div>';
     }
   } catch(e) {}
+  // 源列表本身放进抽屉: 70+ 个源一排到底太长(用户要求), 收起时只占一行
+  var rows = '';
   for (var i = 0; i < list.length; i++) {
     var keyQ = jsa(list[i].key);
     var isCur = (list[i].key === curSite);
-    h += '<div class="srcrow">'
-      + '<div class="sinfo" title="' + esc(list[i].api) + '">' + esc(list[i].name)
+    var sp = list[i].spider || String(list[i].key || '').indexOf('csp_') === 0;
+    rows += '<div class="srcrow">'
+      + '<div class="sinfo" title="' + esc(list[i].api) + '">' + (sp ? '🕷 ' : '') + esc(list[i].name)
       + (isCur ? ' <span class="sbad">当前源</span>' : '')
-      + '<br><span class="sapi">' + esc(list[i].api) + esc(list[i].path || '') + '</span></div>'
+      + '<br><span class="sapi">' + esc(list[i].api) + esc(list[i].path || '')
+      + (list[i].ext ? ('  · ext ' + esc(String(list[i].ext).slice(0, 40))) : '') + '</span></div>'
       + '<button class="pbtn" onclick="useUserSite(' + keyQ + ')">' + (isCur ? '已用' : '设为首选') + '</button>'
       + '<button class="pbtn" onclick="delUserSite(' + keyQ + ')">删除</button></div>';
   }
+  h += drawer('drwMine', '📺 TVBOX源', list.length + ' 个', rows, false);
   cd.innerHTML = h;
 }
 function useUserSite(key){
@@ -3984,35 +3990,37 @@ function onDecrypt(jsonStr){
     + '<br><button class="pbtn" onclick="decCopy(decJson)">复制完整结果(JSON)</button>'
     + ' <button class="pbtn" onclick="decCopy(decRaw)">复制解密原文</button></div>';
   var apis = d.apis || [], lv = d.livesList || [], sp = d.spiders || [];
-  h += '<div class="pw">📡 采集接口（' + apis.length + '）—— 这类才是影视源，可逐条加：</div>';
+  var apiRows = '';
   for (var i = 0; i < apis.length; i++) {
     var a = apis[i], u = a.base + a.path;
-    h += '<div class="srcrow"><div class="sinfo">' + esc(a.name || '源') + '<br><span class="sapi">' + esc(a.raw) + '</span></div>'
+    apiRows += '<div class="srcrow"><div class="sinfo">' + esc(a.name || '源') + '<br><span class="sapi">' + esc(a.raw) + '</span></div>'
       + decAddBtn(decSiteAdded(a.base, a.path), '加入影视源',
           'decAddSite(' + jsa(JSON.stringify({k: a.base.replace(/[^a-z0-9]/gi, '').slice(0, 10), n: a.name, b: a.base, p: a.path})) + ')')
       + '<button class="pbtn" onclick="decCopy(' + jsa(u) + ')">复制</button></div>';
   }
-  h += '<div class="pw">📺 直播表（' + lv.length + '）—— 加进来会先真拉一次、解析出频道才收：</div>';
+  h += drawer('drwApi', '📡 采集接口', apis.length + ' 个', apiRows || '<div class="hint">这次配置里没有采集接口（只有蜘蛛源/直播表）</div>', apis.length > 0 && apis.length <= 8);
+  var liveRows = '';
   for (var j = 0; j < lv.length; j++) {
-    h += '<div class="srcrow wide"><div class="sinfo">' + esc(lv[j].name || '直播') + '<br><span class="sapi">' + esc(lv[j].url)
+    liveRows += '<div class="srcrow wide"><div class="sinfo">' + esc(lv[j].name || '直播') + '<br><span class="sapi">' + esc(lv[j].url)
       + (lv[j].ua ? ('  · UA ' + esc(lv[j].ua)) : '') + '</span></div>'
       + decAddBtn(decLiveAdded(lv[j].url), '加入直播源', 'decAddLive(' + j + ')')
       + '<button class="pbtn" onclick="decCopy(' + jsa(lv[j].url) + ')">复制</button></div>';
   }
+  h += drawer('drwLive', '📺 直播表', lv.length + ' 个', liveRows || '<div class="hint">这次配置里没有直播表</div>', lv.length > 0 && lv.length <= 5);
   if (!WEB) {
-    h += '<div class="pw">🕷 蜘蛛站点（' + sp.length + '）—— 靠 jar 里的爬虫跑，加入前会先下 jar 真测。<br>'
-      + '注意：<b>ext 是"规则"（网址模板/整段规则）的这类，是不可能转成 JSON 接口的</b>（接口探测对它们无效），'
-      + '只能跑 jar；ext 是 http 接口的才是能直接当影视源的那种。</div>';
+    var spRows = '<div class="hint">靠 jar 里的爬虫跑，加入前会先下 jar 真测。<b>ext 是"规则"的这类不可能转成 JSON 接口</b>'
+      + '（接口探测对它们无效），只能跑 jar；ext 是 http 接口的才是能直接当影视源的那种。</div>';
     for (var k = 0; k < sp.length; k++) {
       var isRule = String(sp[k].ext || '').indexOf('{cateId}') >= 0 || String(sp[k].ext || '').indexOf('"') === 0
         || String(sp[k].ext || '').indexOf('请求头') >= 0;
-      h += '<div class="srcrow wide"><div class="sinfo">' + esc(sp[k].key) + ' ' + esc(sp[k].name || '')
+      spRows += '<div class="srcrow wide"><div class="sinfo">' + esc(sp[k].key) + ' ' + esc(sp[k].name || '')
         + (isRule ? ' <span class="sbad">规则</span>' : '')
         + '<br><span class="sapi">' + esc(sp[k].ext || '(无 ext)') + '</span></div>'
         + decAddBtn(decSpiderAdded(sp[k].key, sp[k].ext), '加入(蜘蛛)', 'decAddSpider(' + k + ')')
         + '<button class="pbtn" onclick="spiderTestNow(' + k + ')">自测</button>'
         + '<button class="pbtn" onclick="decCopy(' + jsa(sp[k].key + ' ' + (sp[k].ext || '')) + ')">复制</button></div>';
     }
+    h += drawer('drwSpider', '🕷 蜘蛛站点', sp.length + ' 个', spRows, sp.length > 0 && sp.length <= 8);
     if (d.spiderJar) {
       h += '<div class="pw">蜘蛛 jar：' + esc(d.spiderJar)
         + (d.spiderJarUsable ? '' : '<br><b class="bad">这个 jar 是别人 App 里打包的(assets:// 之类)，我们下不到，加不了</b>')
@@ -4081,6 +4089,27 @@ function decAddLive(i){
  */
 var decJob = null;   // {kind, list, i, ok, fail, note}
 
+/**
+ * 通用抽屉: 头行(点一下展开/收起) + 展开区(内部滚动)。
+ * 为什么要: 解密结果动辄 30+ 行、TVBOX源 70+ 个, 一排到底又长又难找(用户要求"优雅点")。
+ * open 状态记在 openDrawers 里 —— 重画(解密/加源后刷新)时不会把用户展开的那段又收回去。
+ */
+var openDrawers = {};
+function drawer(id, title, count, bodyHtml, defaultOpen){
+  if (openDrawers[id] === undefined) openDrawers[id] = !!defaultOpen;
+  var open = openDrawers[id] ? ' open' : '';
+  return '<div class="drw' + open + '" id="' + esc(id) + '">'
+    + '<button class="drwh" onclick="toggleDrawer(' + jsa(id) + ')">' + title
+    + (count != null ? ('<span class="cnt">' + count + ' ▾</span>') : '<span class="cnt">▾</span>') + '</button>'
+    + '<div class="drwb">' + bodyHtml + '</div></div>';
+}
+function toggleDrawer(id){
+  var el = document.getElementById(id);
+  if (!el) return;
+  var open = !(openDrawers[id]);
+  openDrawers[id] = open;
+  try { if (open) el.classList.add('open'); else el.classList.remove('open'); } catch(e) {}
+}
 function decBatchNote(msg){
   var el = document.getElementById('decBatchNote');
   if (el) el.textContent = msg || '';
