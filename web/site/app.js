@@ -58,6 +58,18 @@ function show(v){
   if (pl && (pl.className || "").indexOf("on") >= 0 && v !== "v-player") { try { closePlayer(); } catch(e){} }
   showList().forEach(function(x){ var e = $(x); if (e) e.style.display = (x===v?"":"none"); });
   hideKwPrev();          // 换页就把搜索预览收掉, 免得它挂在别的视图上
+  // ---- 交互反馈(用户: "从一个页面点到另一个页面没有互动、显示都一样") ----
+  try { markNav(v); } catch(e) {}                       // ① 顶栏高亮当前页
+  try {                                                
+    var sec = $(v);
+    if (sec) {                                          // ② 新页面淡入+上移(180ms), 换页"看得见"
+      sec.classList.remove('venter');
+      void sec.offsetWidth;                             // 强制重排, 让动画能重放
+      sec.classList.add('venter');
+      setTimeout(function(){ try { sec.classList.remove('venter'); } catch(e){} }, 260);
+    }
+    paintPageTitle(v);                                  // ③ 页面标题/说明(每页显示不一样)
+  } catch(e) {}
   $("main").scrollTop = 0;
   try { if (isWeb()) window.scrollTo(0, 0); } catch(e) {}   // 网页端是"文档自然滚动"(像博客那样), 要滚窗口
 }
@@ -228,6 +240,39 @@ function onVodHome(seq, items){
  * ① 主页搜索框回车(searchFromHome) ② 详情页的「搜索」按钮。这个函数保留着(闸门 ④ 也钉着它),
  * 谁要再加"进搜索页"的入口就直接用它(它比 show('v-search') 多一步聚焦, 用户不用再点一下输入框)。
  */
+/**
+ * 顶栏当前页高亮 + 页面标题。
+ * 用户反馈"从一个页面点到另一个页面没有互动、显示都一样" —— 之前切页只是把 section 显示/隐藏,
+ * 顶栏没有任何变化、也没有一句"你现在在哪"。现在: 高亮对应导航按钮 + 页面顶部显示标题与一句说明。
+ */
+var PAGE_META = {
+  'v-home':   ['首页', '豆瓣榜单 · 点开即播'],
+  'v-search': ['搜索', '并发搜所有源'],
+  'v-detail': ['详情', '选源/选集/投屏'],
+  'v-hist':   ['观看记录', '继续看 / 清理 / 导出'],
+  'v-live':   ['直播', '分组/搜索/探活记忆'],
+  'v-dec':    ['解密', 'TVBox 配置 → 可用的源'],
+  'v-update': ['更新', '检查新版本'],
+  'v-crash':  ['上次崩溃', '诊断信息']
+};
+var NAV_OF = { 'v-hist': 'navHist', 'v-live': 'navLive', 'v-dec': 'navDec', 'v-update': 'navUpd' };
+function markNav(v){
+  var nav = document.querySelectorAll('#navScroll button');
+  for (var i = 0; i < nav.length; i++) {
+    var id = nav[i].id || '';
+    if (id && id === NAV_OF[v]) nav[i].classList.add('on'); else nav[i].classList.remove('on');
+  }
+}
+function paintPageTitle(v){
+  var el = document.getElementById('pageTitle');
+  if (!el) return;
+  var m = PAGE_META[v];
+  if (!m) { el.style.display = 'none'; return; }
+  // 首页/搜索页自己有标题区, 就不再重复画; 其它页在最上面显示一行(标题 + 说明)
+  if (v === 'v-home' || v === 'v-search') { el.style.display = 'none'; return; }
+  el.innerHTML = esc(m[0]) + '<span class="sub">' + esc(m[1]) + '</span>';
+  el.style.display = '';
+}
 function openSearch(){
   show('v-search');
   var k = document.getElementById('kw');
