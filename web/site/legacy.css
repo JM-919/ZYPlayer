@@ -27,13 +27,6 @@ html.light{--bg:#f4f6fa;--bg2:rgba(0,0,0,.045);--card:rgba(255,255,255,.86);--li
     box-shadow:0 2px 8px rgba(20,30,50,.10), inset 0 1px 0 rgba(255,255,255,.9),
                inset 0 0 0 1px rgba(0,0,0,.06);}
   
-  html.light #ptop .pbtn,html.light #pbot .pbtn,html.light #pcenter .pbtn,
-  html.light #pnext .pbtn,html.light #pskip .pbtn,
-  html.light #ptop,html.light #pbot,html.light #ptitle{color:#fff;}
-  html.light #ptop .pbtn,html.light #pbot .pbtn,html.light #pcenter .pbtn,
-  html.light #pnext .pbtn,html.light #pskip .pbtn{
-    background:rgba(255,255,255,.14);color:#fff;box-shadow:none;}
-  
   html.light #pset h3,html.light #plist h3,html.light #qlist h3,html.light #pvip h3,
   html.light #pcast h3,html.light #pset label,html.light #plist label,html.light #pskip label{color:#111827;}
   html.light #pset .skiprow label,html.light #plist .skiprow label,html.light #pskip .skiprow label{color:#374151;}
@@ -56,8 +49,23 @@ html.light{--bg:#f4f6fa;--bg2:rgba(0,0,0,.045);--card:rgba(255,255,255,.86);--li
   html.light .pclose:active{background:rgba(0,0,0,.18);}
   html.light #pmask{background:rgba(255,255,255,.62);}
   
-  html.light #player,html.light #webvip{background:#000;}
-  html.light #player #ptop,html.light #player #pbot{background:linear-gradient(180deg,rgba(0,0,0,.82),transparent);}
+  html.light #pcenter .pbtn,html.light #pnext .pbtn,html.light #pgbar .pthumb{color:#fff;background:rgba(255,255,255,.14);}
+  html.light #pgest,html.light #pnext .nm,html.light #pnext .tip{color:#fff;}
+
+  
+  html.light #player{background:#eef1f6;}
+  html.light #ptop{background:linear-gradient(180deg, rgba(255,255,255,.94), rgba(255,255,255,0));}
+  html.light #pbot{background:linear-gradient(0deg, rgba(255,255,255,.94), rgba(255,255,255,0));}
+  html.light #ptitle{color:#111827;}
+  html.light #ptop .pbtn,html.light #pbot .pbtn{color:#111827;background:rgba(0,0,0,.07);
+    box-shadow:0 2px 8px rgba(20,30,50,.10), inset 0 1px 0 rgba(255,255,255,.9);}
+  html.light #pgbar{background:rgba(0,0,0,.16);}
+  html.light #pbot .t{color:#374151;}          
+  html.light #pzap .eps button,html.light #prate{color:#111827;}
+  html.light #prate{background:rgba(0,0,0,.07);}
+  html.light #pload,html.light #ploadtxt{color:#374151;}
+  
+  html.light #webvip{background:#000;}
   *{-webkit-box-sizing:border-box;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
   html,body{margin:0;height:100%;background:#07090e;color:#eef3fb;
     font:15px/1.5 -apple-system,"PingFang SC","Noto Sans CJK SC",sans-serif;overflow:hidden;}
