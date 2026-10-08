@@ -148,7 +148,7 @@ function pickSite(k){
   try { localStorage.setItem('pk_site', k); } catch(e){}   // 记住"首选源", 下次启动还是它
 }
 var pendingPick = false, pickTimer = null;
-var homeSeq = 0;                             // 首页请求序号(见 onVodHome): 迟到的旧响应直接丢
+var homeSeq = 0, homeMode = 'chart';   // 'chart'=豆瓣榜单(默认) 'src'=看某个源的分类/首屏                             // 首页请求序号(见 onVodHome): 迟到的旧响应直接丢
 /**
  * 首页刷新。
  * force=true 是**用户点了「刷新」按钮**: 不吃缓存、直接打服务端, 并且给可见反馈
@@ -164,7 +164,7 @@ function reloadHome(force){
     try { localStorage.setItem('zy_web_chart', curType || 'movie_showing'); } catch(e) {}
     paintChart();
   }
-  var ck = "pk_home_v2_" + curSite + "_" + curType;   // v2: 首页换成豆瓣榜单后, 老缓存(没海报)不能再吃
+  var ck = "pk_home_v2_" + curSite + "_" + curType + "_" + homeMode;   // 榜单/源两种模式不能共用缓存   // v2: 首页换成豆瓣榜单后, 老缓存(没海报)不能再吃
   var cached = null;
   if (!force) { try { cached = JSON.parse(localStorage.getItem(ck) || "null"); } catch(e){} }
   if (cached && cached.length) {
@@ -179,7 +179,7 @@ function reloadHome(force){
   var seq = ++homeSeq;
   if (force) forceSeq = seq;
   var ok = true;
-  try { VOD.home(curSite, curType, page, seq); } catch(e) { ok = false; $("load").textContent = "刷新失败: " + e; }
+  try { VOD.home(curSite, curType, page, seq, homeMode); } catch(e) { ok = false; $("load").textContent = "刷新失败: " + e; }
   clearTimeout(homeTimeout);
   if (ok) homeTimeout = setTimeout(function(){
     if (seq !== homeDoneSeq) $("load").textContent = "刷新超时 —— 检查网络后点「刷新」重试";
@@ -194,7 +194,7 @@ function moreHome(){
   homeDoneSeq = -1;
   clearTimeout(homeTimeout);
   homeTimeout = setTimeout(function(){ homeLoading = false; }, 13000);
-  try { VOD.home(curSite, curType, page, ++homeSeq); }
+  try { VOD.home(curSite, curType, page, ++homeSeq, homeMode); }
   catch(e) { homeLoading = false; $("load").textContent = "加载失败: " + e; }
 }
 // onVodHome 带请求令牌: 切分类/切源时在途的旧响应会被丢弃, 不会覆盖或串进新列表
@@ -362,7 +362,13 @@ function onVodSearchPending(seq, n){
   if (seq && seq !== suSearchSeq) return;
   suSearchPending = n || 0;
   var tip = document.getElementById('searchTip');
-  if (tip) tip.textContent = (lastSearchWord ? ('「' + lastSearchWord + '」· ') : '') + '采集源已回，还有 '
+  if (!tip) return;
+  if (suSearchPending <= 0) {
+    // 蜘蛛搜完了: 重画一次结果(它会把"还有 N 个在搜"的后缀去掉) —— 否则会一直挂着"还有 0 个"
+    try { onVodSearch(suSearchSeq, allResults); } catch(e) { tip.textContent = '搜索完成'; }
+    return;
+  }
+  tip.textContent = (lastSearchWord ? ('「' + lastSearchWord + '」· ') : '') + '采集源已回，还有 '
     + suSearchPending + ' 个蜘蛛源在搜（首次要加载爬虫 jar，可能要十几秒）…';
 }
 
@@ -2742,6 +2748,7 @@ function fillCharts(){
   var list = chartsList();
   if (!list || !list.length) return;
   sel.style.display = 'none';     // 首页分类 = 榜单面板, 原来那个"最新更新/电影/连续剧"下拉没用了
+  homeMode = 'chart';             // 选榜单 = 榜单模式(别让豆瓣把源请求顶掉)
 
   var groups = [], map = {}, i, c;
   for (i = 0; i < list.length; i++) {
@@ -2855,6 +2862,7 @@ function paintChart(){
 function onVodClasses(list){
   var sel = document.getElementById('typeSel');
   if (!sel) return;
+  homeMode = 'src';               // 这里填的是**这个源自己的分类** -> 首页要按源取, 不能再被豆瓣顶掉
   var tops = [], subs = {};
   if (list && list.length) {
     for (var i = 0; i < list.length; i++) {
