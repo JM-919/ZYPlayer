@@ -684,6 +684,49 @@
     return { name: name, pic: pic ? imgVia(pic, referer) : '', remarks: remarks || '', score: '',
              siteName: siteName, site: '', id: '', eps: [] };
   }
+  /** 短剧搜索: 红果 /search/<关键字> · 鬼片 RSS 按片名匹配 · 韩小圈 /search.php(站点有拦截) */
+  function suanjuSearchAll(kw, seq) {
+    var q = String(kw == null ? '' : kw).trim();
+    if (!q) { call('onSuanjuSearch', seq, []); return; }
+    var jobs = SUANJU_SRC.filter(function (x) { return x.on; }).map(function (src) {
+      var p;
+      if (src.key === 'hongguo') {
+        var base = 'https://hongguoduanju.com';
+        p = suanjuText(base + '/search/' + encodeURIComponent(q), base + '/').then(function (html) { return parseHongguoHtml(html); });
+      } else if (src.key === 'guipian') {
+        var gb = 'https://guipianwu.com';
+        p = suanjuText(gb + '/xml/rss.xml', gb + '/').then(function (xml) {
+          var items = xml.match(/<item>[\s\S]*?<\/item>/g) || [], low = q.toLowerCase(), out = [];
+          for (var i = 0; i < items.length && out.length < 30; i++) {
+            var t = /<title>\s*(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?\s*<\/title>/.exec(items[i]);
+            if (!t) continue;
+            var nm = t[1].trim();
+            if (nm.toLowerCase().indexOf(low) < 0) continue;
+            out.push(suanjuItem(nm, '', gb + '/', '', '鬼片', ''));
+          }
+          return out;
+        });
+      } else if (src.key === 'hanxiaoquan') {
+        var hb = 'https://www.jennyhow.com';
+        p = suanjuText(hb + '/search.php?searchword=' + encodeURIComponent(q), hb + '/').then(function (html) {
+          var out = [], re = /<a href="\/hanxiaoquan\/(\d+)\.html"[^>]*title="([^"]*)"/g, m;
+          while ((m = re.exec(html)) && out.length < 30) {
+            var tail = html.substr(m.index + m[0].length, 1200);
+            var img = /<img[^>]*data-src="([^"]+)"/.exec(tail);
+            if (out.length === 0 && !/hanxiaoquan/.test(html)) break;
+            out.push(suanjuItem(m[2].trim(), img ? img[1] : '', hb + '/', '', '韩小圈', m[1]));
+          }
+          return out;
+        });
+      } else { p = Promise.resolve([]); }
+      return p.catch(function () { return []; });
+    });
+    Promise.all(jobs).then(function (groups) {
+      var out = [];
+      for (var i = 0; i < groups.length; i++) for (var j = 0; j < groups[i].length; j++) { groups[i][j].su = 1; out.push(groups[i][j]); }
+      call('onSuanjuSearch', seq, out);
+    }).catch(function () { call('onSuanjuSearch', seq, []); });
+  }
   function suanjuHome(key, page, seq) {
     var pg = Math.max(1, page || 1), jobs;
     if (key === 'hongguo') {
@@ -740,6 +783,7 @@
   var PK = {
     suanjuSources: suanjuSources,
     suanju: suanjuHome,
+    suanjuSearch: suanjuSearchAll,
     // ★ 网页版标记: app.js 与 index.html 是 App / 网页共用的同一份界面,
     //   凡是"只有原生做得到"的东西(投屏 / 解析线路 / 调起外部播放器 / 应用内更新 / 蜘蛛 jar / 下载),
     //   靠这个标记在网页端**连按钮带入口一起去掉**; App 侧没有 PK.web, 行为一个字节不变。

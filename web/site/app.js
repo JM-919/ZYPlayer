@@ -7,6 +7,7 @@ function isWeb(){ try { return !!(window.PK && PK.web); } catch(e){ return false
 var curItem = null, curEp = 0, hls = null;
 /* 首页与搜索各自一份数据源：曾共用 lastItems，导致"搜完再回首页点卡片 = 打开搜索结果" */
 var homeItems = [], searchItems = [];
+var suSeq = 0, suSkipOnce = false;            // 短剧搜索: 请求序号 + "这一跳不要再搜短剧"标志
 function listOf(which){                                   // 各页面各自的数据数组
   if (which === "suanju") return suanjuItems;               // 短剧页(条目无 site/id -> 点开按片名搜)
   return which === "search" ? searchItems : homeItems;
@@ -354,6 +355,10 @@ function doSearch(){
   if (sc) { sc.innerHTML = ''; sc.style.display = 'none'; }
   allResults = []; curSrcFilter = '';          // 新搜索: 源筛选回到"全部"
   VOD.search(k);
+  // 短剧源也一起搜(用户要求: 搜索要能搜到短剧源)。从短剧条目点进来时 suSkipOnce=true, 跳过,
+  // 否则"点短剧结果 -> 又只搜出短剧"会打转。
+  if (!suSkipOnce) { try { suSeq++; PK.suanjuSearch(k, suSeq); } catch(e) {} }
+  suSkipOnce = false;
 }
 
 
@@ -433,6 +438,7 @@ function openDetail(which, i){
   if (!it) return;
   // 豆瓣榜单项只有片名/海报/评分, **没有源信息**: 按片名去聚合搜索, 收到同名结果就自动进详情
   if (!it.site || !it.id) {
+    suSkipOnce = !!it.su;            // 短剧条目 -> 这次只搜点播源, 免得又只搜出短剧自己
     pendingOpenName = it.name;
     openSearch();
     var kwb = document.getElementById('kw');
@@ -908,12 +914,35 @@ function loadSuanju(force){
   catch (e) { if (more) more.textContent = '这一版没接短剧接口'; }
 }
 function moreSuanju(){ suanjuPage++; loadSuanju(false); }
+/** 短剧搜索回来了: 并进搜索结果(带来源名, 会被源筛选条识别成独立一栏)。 */
+function onSuanjuSearch(seq, items){
+  if (seq !== suSeq || !items || !items.length) return;
+  for (var i = 0; i < items.length; i++) {
+    items[i].su = 1;
+    allResults.push(items[i]);
+  }
+  try { onVodSearch(allResults); } catch (e) { try { renderSearch(); } catch (e2) {} }
+  suanjuFillPosters(allResults);
+}
+
+/** 没有海报的短剧条目: 借豆瓣按片名取封面(鬼片那站已经下线, RSS 里没有封面) */
+function suanjuFillPosters(items){
+  try {
+    var names = [], i;
+    for (i = 0; i < items.length && names.length < 12; i++) {
+      if (items[i] && items[i].su && !items[i].pic && items[i].name && !doubanOf(items[i].name)) names.push(items[i].name);
+    }
+    if (names.length) PK.douban(JSON.stringify(names), names.length);
+  } catch (e) {}
+}
+
 function onSuanju(seq, items){
   if (seq !== suanjuSeq) return;                 // 迟到的旧响应丢掉(与首页同一套 seq 约定)
   items = items || [];
   suanjuItems = (suanjuPage === 1) ? items : suanjuItems.concat(items);
   var grid = document.getElementById('suanjuGrid'), more = document.getElementById('suanjuMore');
   if (grid) renderGrid(grid, suanjuItems, 0, 'suanju');
+  suanjuFillPosters(suanjuItems);
   if (more) {
     var src = suanjuSourcesList().filter(function (x) { return x.key === suanjuKey; })[0] || {};
     more.textContent = suanjuItems.length
@@ -2704,6 +2733,22 @@ function onDouban(list){
     for (var j = 0; j < els.length; j++) {
       if (els[j].getAttribute('data-name') !== d.name) continue;
       els[j]._db = d;
+      // 没有海报的条目(短剧源里鬼片这种): 用豆瓣封面补上 —— 走平台各自的"带 Referer 的图片代理"
+      try {
+        var holder = els[j].querySelector('.picholder');
+        if (holder && d.img) {
+          var via = '';
+          try { via = PK.imgVia ? PK.imgVia(d.img, 'https://m.douban.com/') : PK.proxyWrap(d.img, 'https://m.douban.com/', ''); } catch (e0) { via = d.img; }
+          if (via) {
+            var im = document.createElement('img');
+            im.className = 'pic'; im.setAttribute('loading', 'lazy'); im.setAttribute('referrerpolicy', 'no-referrer');
+            im.setAttribute('data-n', els[j].getAttribute('data-name') || ''); im.setAttribute('src', via);
+            im.onload = function () { try { zyPicOk(this); } catch (e1) {} };
+            im.onerror = function () { try { imgFallback(this); } catch (e2) {} };
+            holder.parentNode.replaceChild(im, holder);
+          }
+        }
+      } catch (e3) {}
       if (!els[j].querySelector('.db')) {
         var sp = document.createElement('div');
         sp.className = 'db';
