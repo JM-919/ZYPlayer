@@ -403,6 +403,20 @@ function onVodSearch(a, b){
   buildChips(count, order);
   renderSearch();
 }
+/**
+ * 这个源是不是**用户自己加的**(TVBOX/蜘蛛源)? 换源标签与搜索结果都靠它分组 ——
+ * 判定口径只留这一处: VOD.userSites() 里的 key。
+ */
+function srcIsMine(siteKey){
+  if (!siteKey) return false;
+  if (!window.__mineKeys) {
+    window.__mineKeys = {};
+    try { (JSON.parse(VOD.userSites()) || []).forEach(function(s){ if (s && s.key) window.__mineKeys[s.key] = 1; }); } catch(e) {}
+  }
+  return !!window.__mineKeys[siteKey];
+}
+/** 加源/删源之后必须重算(见 onAddSite / delUserSite) */
+function srcMineReset(){ window.__mineKeys = null; }
 function buildChips(count, order){
   if (!order) {
     count = {}; order = [];
@@ -414,15 +428,38 @@ function buildChips(count, order){
   }
   var box = document.getElementById('srcChips');
   if (!box) return;
-  // 下拉抽屉: 头一行始终在(点它展开/收起), 全部源在 body 里换行铺开 —— 不再用横向滑动藏源
+  // 每一条结果都带 site(源 key) 和 siteName(显示名): 用 key 把源分成 **我的源 / 自带源** 两组 ——
+  // 用户要的就是"搜出来的源按自带源和自己加的源分开看"(以前全糊在一起, 24 个自己的源找不着)。
+  var nameIsMine = {}, nameKey = {};
+  for (var z = 0; z < allResults.length; z++) {
+    var it = allResults[z], sn = (it && it.siteName) || '未知';
+    if (nameKey[sn] === undefined) nameKey[sn] = it ? it.site : '';
+    if (it && srcIsMine(it.site)) nameIsMine[sn] = 1;
+  }
+  var mine = [], other = [];
+  for (var j2 = 0; j2 < order.length; j2++) (nameIsMine[order[j2]] ? mine : other).push(order[j2]);
+  // 组内按结果数从多到少: 最可能有片的那几个源排在最前(扫起来快)
+  var byCount = function(a, b){ return (count[b] || 0) - (count[a] || 0); };
+  mine.sort(byCount); other.sort(byCount);
+
+  function chipsOf(list){
+    var h = '';
+    for (var q = 0; q < list.length; q++) {
+      var nm = list[q];
+      h += '<button class="' + (curSrcFilter === nm ? 'on' : '') + '" onclick="filterSrc(&quot;' + esc(nm) + '&quot;)" title="'
+        + esc(nm) + ' ' + count[nm] + ' 条"><span class="nm">' + esc(nm) + '</span><span class="n">' + count[nm] + '</span></button>';
+    }
+    return h;
+  }
   var cur = curSrcFilter || '全部';
   var ch = '<div class="srchead"><button onclick="toggleSrcPanel()">源：' + esc(cur)
-    + ' <span class="cnt">(' + (curSrcFilter ? (count[curSrcFilter] || 0) : allResults.length) + ' 条 / 共 '
-    + order.length + ' 个源)</span> ▾</button></div><div class="srcbody">';
-  ch += '<button class="' + (curSrcFilter === '' ? 'on' : '') + '" onclick="filterSrc(&quot;&quot;)">全部 ' + allResults.length + '</button>';
-  for (var j = 0; j < order.length; j++) {
-    ch += '<button class="' + (curSrcFilter === order[j] ? 'on' : '') + '" onclick="filterSrc(&quot;' + esc(order[j]) + '&quot;)">' + esc(order[j]) + ' ' + count[order[j]] + '</button>';
-  }
+    + ' <span class="cnt">(' + (curSrcFilter ? (count[curSrcFilter] || 0) : allResults.length) + ' 条 / '
+    + order.length + ' 个源)</span> ▾</button></div><div class="srcbody">'
+    + '<div class="srcgrp"><div class="srclist one"><button class="' + (curSrcFilter === '' ? 'on' : '')
+    + '" onclick="filterSrc(&quot;&quot;)"><span class="nm">显示全部源</span><span class="n">' + allResults.length + '</span></button></div></div>';
+  if (mine.length) ch += '<div class="srcgrp"><span class="lbl">TVBOX源 · ' + mine.length + ' 个</span><div class="srclist">' + chipsOf(mine) + '</div></div>';
+  ch += '<div class="srcgrp"><span class="lbl">CMS源 · ' + other.length + ' 个</span><div class="srclist">'
+    + (other.length ? chipsOf(other) : '<button disabled style="opacity:.5"><span class="nm">这次没有结果</span></button>') + '</div></div>';
   ch += '</div>';
   box.innerHTML = ch;
   box.style.display = '';
@@ -563,6 +600,25 @@ function onVodDetail(items){
   renderDetail();
   applyPendingResume();   // 「继续观看」进来的, 详情一到就跳回那一集
 }
+/**
+ * 换源标签的 HTML(按来源分组, 用户要求): 自己加的 = TVBOX源, 内置 = CMS源 —— 一组一行、各自横滑。
+ * renderDetail 与 refreshSrcUi("更多源"合并后刷新标签)**共用这一个**, 免得两处各写一份又不一致
+ * (2026-10 真机踩过: 标签写"TVBOX源 · 4", 按钮却有 10 个)。
+ */
+function srcTabsHtml(){
+  var mineIdx = [], otherIdx = [];
+  for (var gi = 0; gi < srcList.length; gi++) (srcIsMine(srcList[gi].site) ? mineIdx : otherIdx).push(gi);
+  var row = function(list, label){
+    if (!list.length) return '';
+    var s = '<div class="srclbl">' + label + ' · ' + list.length + '</div><div class="chips">';
+    for (var q = 0; q < list.length; q++) {
+      var ix = list[q];
+      s += '<button class="' + (ix === srcIdx ? 'on' : '') + '" onclick="switchSrc(' + ix + ')">' + esc(srcList[ix].siteName) + '</button>';
+    }
+    return s + '</div>';
+  };
+  return row(mineIdx, 'TVBOX源') + row(otherIdx, 'CMS源');
+}
 function switchSrc(k){                     // 手动换源 = 用户认为这条行: 把它的失败/卡住标记撤掉
   if (failedSrc) delete failedSrc[k];
   if (stallTried) delete stallTried[k];
@@ -592,14 +648,7 @@ function renderDetail(){
   if (!it) return;
   curItem = it;
   var eps = it.eps || [];
-  var tabs = '';
-  if (srcList.length > 1) {
-    tabs = '<div class="chips">';
-    for (var i = 0; i < srcList.length; i++) {
-      tabs += '<button class="' + (i === srcIdx ? 'on' : '') + '" onclick="switchSrc(' + i + ')">' + esc(srcList[i].siteName) + '</button>';
-    }
-    tabs += '</div>';
-  }
+  var tabs = (srcList.length > 1) ? ('<div id="srcTabsBox">' + srcTabsHtml() + '</div>') : '';
   var h = '<div class="bar">'
     + '<button class="ghost mini" onclick="goHome()">&lsaquo; 首页</button>'
     + '<div class="grow"></div>'
@@ -2426,6 +2475,7 @@ function onAddSite(name, jsonStr){
     // 源列表没有下拉框(界面里不选源, 聚合搜索会自动带上): 只要刷新内存里的列表,
     // 当前源还在就保持不动, 不在(第一次加源)就用第一个
     try { sites = JSON.parse(VOD.sites()); } catch(e){}
+    try { srcMineReset(); } catch(e) {}     // 加了新源: 分组缓存作废, 下次重算
     var has = false;
     for (var i = 0; i < (sites || []).length; i++) if (sites[i].key === curSite) has = true;
     if (!has && sites && sites.length) pickSite(sites[0].key);
@@ -2454,9 +2504,19 @@ function showUserSites(){
   try {
     var warm = JSON.parse(PK.spiderWarm());
     if (warm && warm.total) {
+      // ★ 显示**真实**状态(用户要求, 不要虚假的):
+      //   · 「内存预热」每次启动必做(蜘蛛实例跟进程走), jar 有缓存时不联网, 实测 ~16 秒;
+      //   · 「jar 缓存」是持久化的: 一周内直接用, 满一周才 HEAD 比对一次, 变了才重下重解。
+      var jarLine = '';
+      if (warm.jars) {
+        jarLine = warm.jarsFresh
+          ? ('jar 缓存：' + warm.jars + ' 个，上次校验 ' + (warm.jarsAgeDays || 0) + ' 天前（7 天后自动再校验，变了会自动重下）')
+          : ('jar 缓存：' + warm.jars + ' 个，**该校验了**（超过一周，下次启动会自动比对/重下）');
+      }
       h += '<div class="pw">🕷 蜘蛛源预载：<b>' + warm.done + '/' + warm.total + '</b>'
-        + (warm.running ? '（后台静默进行中…）' : '（已完成，搜索时不用再等加载）')
+        + (warm.running ? '（后台静默进行中…）' : '（内存已就绪，搜索时不用等 init）')
         + (warm.note ? ('<br><span class="dim" style="font-size:12px">' + esc(warm.note) + '</span>') : '')
+        + (jarLine ? ('<br><span class="dim" style="font-size:12px">' + jarLine + '</span>') : '')
         + '<br><button class="pbtn" onclick="reWarmSpiders()">重新预载</button></div>';
     }
   } catch(e) {}
@@ -2622,6 +2682,7 @@ function refreshLiveList(){
 }
 /** 直接粘一个直播表地址加进来(不经 TVBox 配置) */
 function delUserSite(key){
+  try { srcMineReset(); } catch(e) {}
   try { VOD.delSite(key); } catch(e){ PK.toast('桥不可用: ' + e); }
   setTimeout(showUserSites, 400);
 }
@@ -3282,15 +3343,12 @@ function refreshSrcUi(){
   if (sheetOn('qlist')) fillQuality();
   var v = document.getElementById('v-detail');
   if (!v || srcList.length < 2) return;
-  var html = '';
-  for (var i = 0; i < srcList.length; i++)
-    html += '<button class="' + (i === srcIdx ? 'on' : '') + '" onclick="switchSrc(' + i + ')">' + esc(srcList[i].siteName) + '</button>';
-  var chips = v.querySelector('.chips');
-  if (chips) { chips.innerHTML = html; return; }
+  var box = document.getElementById('srcTabsBox');
+  if (box) { box.innerHTML = srcTabsHtml(); return; }      // 分组标签整块重画(不碰 curEp)
   var head = v.querySelector('.dhead');
   if (head && head.parentNode) {
     var d = document.createElement('div');
-    d.className = 'chips'; d.innerHTML = html;
+    d.id = 'srcTabsBox'; d.innerHTML = srcTabsHtml();
     head.parentNode.insertBefore(d, head);
   }
 }

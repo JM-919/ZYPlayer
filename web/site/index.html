@@ -67,24 +67,35 @@
   .kwprev .it .nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .kwprev .it .tag{font-size:11px;color:var(--dim);flex:none;}
   .kwprev .it.go{color:#7cc4ff;font-weight:600;}
-  /* 源筛选: **下拉抽屉**(用户要求)。
-     收起时只占一行("源：全部 ▾"), 点一下展开列出**全部源**(换行铺开、块内纵向滚动) ——
-     既不用横向滑动藏源, 也不会一屏被源标签占满。 */
-  #srcChips{display:block;margin-bottom:10px;}
+  /* ★ .chips 是**共用**样式(直播页的分组 #liveGroups 也在用) —— 所以它必须保持原样:
+     单行 + 横向滚动。2026-10 我把这里改成"换行铺开", 结果直播页的分组也一起变成了几百个标签的大墙,
+     用户直接骂了。**改样式前先看谁在用**。 */
+  .chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;margin-bottom:10px;}
+  .chips button{background:var(--g1);color:var(--dim);font-weight:600;padding:7px 12px;border-radius:99px;flex:none;
+    border:1px solid var(--hair);-webkit-backdrop-filter:var(--blurS);backdrop-filter:var(--blurS);
+    box-shadow:0 4px 14px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.14);}
+  /* 搜索结果里的"源"筛选: 只有这一处是抽屉(收起一行, 展开列出全部源, 按 **我的源 / 自带源** 分组) */
+  #srcChips{display:block;margin-bottom:10px;overflow:visible;}
   #srcChips .srchead{display:flex;align-items:center;gap:8px;}
   #srcChips .srchead button{flex:1;text-align:left;background:var(--g1);color:var(--fg);font-weight:600;
     padding:8px 12px;border-radius:10px;border:1px solid var(--hair);font-size:13px;}
   #srcChips .srchead .cnt{color:var(--dim);font-weight:400;font-size:12px;}
-  #srcChips .srcbody{display:none;margin-top:8px;gap:8px;-webkit-flex-wrap:wrap;flex-wrap:wrap;
-    max-height:190px;overflow-y:auto;-webkit-overflow-scrolling:touch;}
-  #srcChips.open .srcbody{display:flex;}
-  .chips button{background:var(--g1);color:var(--dim);font-weight:600;padding:7px 12px;border-radius:99px;flex:none;
-    border:1px solid var(--hair);-webkit-backdrop-filter:var(--blurS);backdrop-filter:var(--blurS);
-    box-shadow:0 4px 14px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.14);}
-  .chips button{background:var(--g1);color:var(--dim);font-weight:600;padding:7px 12px;border-radius:99px;flex:none;
-    border:1px solid var(--hair);-webkit-backdrop-filter:var(--blurS);backdrop-filter:var(--blurS);
-    box-shadow:0 4px 14px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.14);}
-  .chips button.on{background:linear-gradient(180deg,#3ddc7f,#1fa855);color:#04120a;border-color:transparent;}
+  #srcChips .srcbody{display:none;margin-top:8px;max-height:52vh;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+  #srcChips.open .srcbody{display:block;}
+  /* 两组(TVBOX源 / CMS源) + 每行两列: 名长的用省略号, 数量右对齐 —— 比一堆参差的圆角标签好扫 */
+  #srcChips .srcgrp{margin:10px 0 2px;}
+  #srcChips .srcgrp .lbl{display:block;font-size:12px;color:var(--dim);margin:0 0 6px 2px;letter-spacing:.02em;}
+  #srcChips .srclist{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+  #srcChips .srclist.one{grid-template-columns:1fr;}
+  #srcChips .srclist button{display:flex;align-items:center;justify-content:space-between;gap:6px;min-width:0;
+    background:var(--g1);color:var(--fg);border:1px solid var(--hair);border-radius:10px;padding:7px 10px;
+    font-size:12.5px;font-weight:600;text-align:left;overflow:hidden;}
+  #srcChips .srclist button .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  #srcChips .srclist button .n{flex:none;color:var(--dim);font-weight:400;font-size:11.5px;}
+  #srcChips .srclist button.on{background:linear-gradient(180deg,#3ddc7f,#1fa855);color:#04120a;border-color:transparent;}
+  #srcChips .srclist button.on .n{color:#04120a;}
+  /* 换源/详情里的小组标题(与搜索抽屉同款观感) */
+  .srclbl{font-size:11.5px;color:var(--dim);margin:2px 0 4px 2px;letter-spacing:.02em;}
   .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
   .item{position:relative;border-radius:12px;overflow:hidden;background:var(--card);
     border:1px solid var(--hair);-webkit-backdrop-filter:var(--blurS);backdrop-filter:var(--blurS);
