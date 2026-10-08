@@ -659,6 +659,60 @@
     if (el) el.style.filter = Math.abs(webBright - 1) < 0.01 ? '' : 'brightness(' + webBright.toFixed(2) + ')';
   }
 
+  /* ---------------- 解析线路表(与安卓端 VipParse.LINES 同一份) + 网页端战绩 ---------------- */
+  var VIP_LINES = [
+    { name: 'TXNQ',  api: 'https://bfq.txnp.cn/player?url=',            note: '' },
+    { name: '酥皮',  api: 'https://art.txnp.cn/?url=',                   note: '' },
+    { name: '麒麟1', api: 'https://free.maccms.xyz/?url=',               note: '' },
+    { name: '七哥',  api: 'https://jx.202617.xyz/tv.php?url=',           note: '首次进入会跳一次带签名的地址，等它跳完' },
+    { name: 'M1907', api: 'https://im1907.top/?jx=',                     note: '播放器在 iframe 里，稍慢' },
+    { name: 'Node',  api: 'https://jx.nodenode.dpdns.org/?url=',          note: '' },
+    { name: '邦宁',  api: 'https://video.isyour.love/player/getplayer?url=', note: '有时先给一页「更多线路」' },
+    { name: '66网2', api: 'https://www.66dpw.vip/88888888/jiexi.html?url=', note: '内部会再嵌 66网3' },
+    { name: '66网3', api: 'https://svip.qlplayer.cyou/?url=',            note: '直连会被「域名未授权」挡住' },
+    { name: '66网1', api: 'https://www.66dpw.vip/?url=',                 note: '授权宿主页，网页端不一定成功' }
+  ];
+  function sameNameish(a, b) {
+    var f = function (x) { return String(x == null ? '' : x).replace(/[\s·:：\-—()（）\[\]【】。.!！?？,，]/g, '').replace(/第[一二三四五六七八九十0-9]+[季部集]/g, ''); };
+    var x = f(a), y = f(b);
+    if (!x || !y) return false;
+    return x === y || x.indexOf(y) >= 0 || y.indexOf(x) >= 0;
+  }
+  var VIP_KEY = 'zy_vipline';
+  function vipStat() { try { return JSON.parse(localStorage.getItem(VIP_KEY) || '{}') || {}; } catch (e) { return {}; } }
+  function vipSave(o) { try { localStorage.setItem(VIP_KEY, JSON.stringify(o)); } catch (e) {} }
+  function vipTable() {
+    var st = vipStat(), out = [];
+    for (var i = 0; i < VIP_LINES.length; i++) {
+      var s = st[VIP_LINES[i].name] || {};
+      out.push({ i: i, name: VIP_LINES[i].name, note: VIP_LINES[i].note, gate: false,
+                 mark: 'web', ok: s.ok || 0, fail: s.fail || 0, ms: 0 });
+    }
+    return out;
+  }
+  function vipOrder() {
+    var st = vipStat(), idx = [];
+    for (var i = 0; i < VIP_LINES.length; i++) idx.push(i);
+    idx.sort(function (a, b) {
+      var sa = st[VIP_LINES[a].name] || {}, sb = st[VIP_LINES[b].name] || {};
+      var ka = (sa.ok || 0) + (sa.fail || 0), kb = (sb.ok || 0) + (sb.fail || 0);
+      var va = ka ? ((sa.ok || 0) * 2 - (sa.fail || 0)) : 0;
+      var vb = kb ? ((sb.ok || 0) * 2 - (sb.fail || 0)) : 0;
+      return vb !== va ? vb - va : a - b;
+    });
+    return idx;
+  }
+  function vipBuild(i, pageUrl) {
+    if (i < 0 || i >= VIP_LINES.length || !pageUrl) return '';
+    return VIP_LINES[i].api + encodeURIComponent(pageUrl);
+  }
+  function vipRecord(i, ok) {
+    if (i < 0 || i >= VIP_LINES.length) return;
+    var st = vipStat(), nm = VIP_LINES[i].name, s = st[nm] || { ok: 0, fail: 0 };
+    if (ok) s.ok = (s.ok || 0) + 1; else s.fail = (s.fail || 0) + 1;
+    s.ts = Date.now(); st[nm] = s; vipSave(st);
+  }
+
   var PK = {
     // ★ 网页版标记: app.js 与 index.html 是 App / 网页共用的同一份界面,
     //   凡是"只有原生做得到"的东西(投屏 / 解析线路 / 调起外部播放器 / 应用内更新 / 蜘蛛 jar / 下载),
@@ -759,9 +813,19 @@
     installUpdate: function () { call('onUpdateResult', false, '网页版用浏览器刷新即可, 不需要装包'); },
     openInstallPerm: function () {}, openExternal: function (u) { try { root.open(u, '_blank'); } catch (e) {} },
     openFile: function () { toast('网页版不能打开本地文件播放'); },
-    // 解析线路: 网页版没有隐藏 WebView, 抓不到页面里的流 —— 如实报错
-    vipLines: function () { return JSON.stringify([{ i: 0, name: '网页版不支持', mark: '', note: '需要原生 WebView 嗅探', gate: false }]); },
-    vipSniff: function () { toast('网页版抓不到网页里的流(需要 App 的隐藏 WebView)'); },
+    /* ---------------- 解析线路(网页版的"退路") ----------------
+     * 浏览器抓不到第三方解析页里的流(跨域 iframe 内的请求读不到), 但实测这些解析页**都允许被 iframe 内嵌**
+     * (没有 X-Frame-Options / frame-ancestors) —— 所以网页版的做法是:
+     *   ① 把「解析接口 + 页面地址」放进**页内 iframe** 让第三方播放器自己播(退路一);
+     *   ② 不行就「新标签打开」直接看(退路二);
+     *   ③ 另一条独立退路: 拿片名去别的源找**同一集的直链**(见 rescueResolve);
+     *   ④ 哪条线能用由用户点「这条能看/不行」记进 localStorage, 下次自动排前面 —— 与安卓端战绩同一个思路。
+     */
+    vipLines: function () { return JSON.stringify(vipTable()); },
+    vipOrder: function () { return JSON.stringify(vipOrder()); },
+    vipBuild: function (i, pageUrl) { return vipBuild(i, pageUrl); },
+    vipRecord: function (i, ok) { vipRecord(i, !!ok); },
+    vipSniff: function () { toast('网页版请用「页内播放」或「新标签打开」(浏览器抓不到第三方解析页里的流)'); },
     platResolve: function (pageUrl) {
       // 只做"平台 API 本身就允许跨域"的那种(如 B 站), 其余如实返回空
       var out = [];
@@ -781,7 +845,42 @@
       }
       fail();
     },
-    rescueResolve: function (name, epIndex, epName) { call('onRescueResolved', false, '网页版不支持按片名救场解析'); },
+    /**
+     * 网页版的"按片名救场": 当前集是平台页面(爱奇艺/腾讯页)或直链失效时, 拿片名去别的源找同一集的**直链**。
+     * 这是网页版最实用的一条退路 —— 采集源里同一部剧往往有能直连的 m3u8, 找到就切过去。
+     */
+    rescueResolve: function (name, epIndex, epName, cookie) {
+      var kw = String(name || '').trim();
+      if (!kw) { call('onRescueResolved', false, '没有片名'); return; }
+      var want = String(epName || '').trim();
+      var jobs = allSites().slice(0, 14).map(function (s) {
+        return search(s, kw, 1).then(function (hits) {
+          for (var i = 0; i < hits.length; i++) {
+            if (!sameNameish(hits[i].name, kw)) continue;
+            return detail(s, hits[i].id).then(function (ds) {
+              var it = ds[0]; if (!it || !it.eps || !it.eps.length) return [];
+              var out = [];
+              for (var k = 0; k < it.eps.length; k++) {
+                var e = it.eps[k];
+                if (want && e.name && !sameNameish(e.name, want) && k !== (epIndex || 0)) continue;
+                if (/^https?:\/\/[^\s]+\.(m3u8|mp4|flv|ts)(\?|$)/i.test(e.url)) out.push(e);
+              }
+              if (!out.length && it.eps[0] && /^https?:\/\/[^\s]+\.(m3u8|mp4|flv|ts)(\?|$)/i.test(it.eps[0].url)) out.push(it.eps[0]);
+              return out.slice(0, 2);
+            });
+          }
+          return [];
+        }).catch(function () { return []; });
+      });
+      Promise.all(jobs).then(function (groups) {
+        var flat = [];
+        groups.forEach(function (g) { g.forEach(function (e) { flat.push(e); }); });
+        if (flat.length) call('onRescueResolved', kw + ' · ' + (want || '第1集'), (flat[0].name || kw), flat[0].url, JSON.stringify(flat.slice(0, 3).map(function (e) {
+          return { url: e.url, ext: 'm3u8', quality: '', source: '别的源' };
+        })));
+        else call('onRescueResolved', false, '别的源也没找到这一集的直链');
+      });
+    },
     openExternal: function (u) { try { root.open(u, '_blank'); } catch (e) {} }
   };
 

@@ -1704,7 +1704,7 @@ function renderVipPanel(){
         + (i + 1) + '. ' + esc(list[i].source || '线路') + ' ' + esc(list[i].quality || '') + '</button>';
     }
   }
-  h += '<button onclick="rescueStart()">按片名去追剧源找这一集并解析</button>';
+  h += '<button onclick="rescueStart()">' + (isWeb() ? '去别的源找这一集（直链）' : '按片名去追剧源找这一集并解析') + '</button>';
   if (curItem && curItem.live) {
     h += '<button onclick="openExternal()">用其它播放器打开这条线路（本机解不了码时用这个）</button>';
   }
@@ -1729,7 +1729,7 @@ function renderVipPanel(){
          + (L.ms ? (' · ' + Math.round(L.ms / 1000) + 's') : '') + '</span>')
       : '<span class="pw">未测过</span>';
     // 手机上没有 title 悬浮提示, 所以把"这条线的注意事项"直接写在按钮里
-    h += '<button onclick="vipSniffEp(' + L.i + ')">' + esc(L.name)
+    h += '<button onclick="' + (isWeb() ? ('webVipPlay(' + L.i + ')') : ('vipSniffEp(' + L.i + ')')) + '">' + esc(L.name)
       + (L.gate ? '（需宿主页）' : '')
       + badge
       + (L.note ? '<span class="pw">' + esc(L.note) + '</span>' : '') + '</button>';
@@ -1783,6 +1783,12 @@ function onRescueResolved(name, info, pageUrl, items){
 var vipTest = null;      // {running, order, i, done, total, cur, ok, fail, page, ck, timer, wait}
 
 function vipAutoTry(){
+  if (isWeb()) {                       // 网页端: "自动试"= 直接用战绩最好的那条(页内播放)
+    var order0 = [];
+    try { order0 = JSON.parse(PK.vipOrder()); } catch(e) { order0 = []; }
+    if (order0.length) webVipPlay(order0[0]);
+    return;
+  }
   var ep = (curItem && curItem.eps) ? curItem.eps[curEp] : null;
   if (!ep) { PK.toast('先播一集'); return; }
   var page = ep.page || (isMediaUrl(ep.url) ? '' : ep.url);
@@ -1793,6 +1799,11 @@ function vipAutoTry(){
   vipRun(order, page, ep.cookie || '', 3, false);
 }
 function vipTestAll(){
+  if (isWeb()) {                       // 网页端测不出"是否出流"(跨域), 改为逐条打开让你自己看: 先给战绩最好的
+    try { PK.toast('浏览器里没法自动判断出流; 面板按战绩排序, 点一条试, 能看就点「这条能看」'); } catch(e) {}
+    vipAutoTry();
+    return;
+  }
   var ep = (curItem && curItem.eps) ? curItem.eps[curEp] : null;
   var page = ep ? (ep.page || (isMediaUrl(ep.url) ? '' : ep.url)) : '';
   if (!page) { PK.toast('先播一集(或让这一集带着平台页面)'); return; }
@@ -1854,6 +1865,41 @@ function vipFinish(){
 /** addFound 里调它: 某条线路出流了 */
 function vipNoticed(){
   if (vipTest && vipTest.running) vipNext(true);
+}
+/**
+ * 网页版的解析退路(用户要的"多一条退路"):
+ * 浏览器抓不到第三方解析页里的流(跨域), 但这些解析页**允许被 iframe 内嵌**(实测无 XFO/frame-ancestors),
+ * 于是: 页内 iframe 让第三方播放器自己播 → 「能看/不行」记进战绩 → 下次自动排前面; 不行还有新标签打开。
+ */
+function webVipPlay(i){
+  var ep = (curItem && curItem.eps) ? curItem.eps[curEp] : null;
+  if (!ep) { try { PK.toast('先播一集'); } catch(e){} return; }
+  var page = ep.page || (isMediaUrl(ep.url) ? '' : ep.url);
+  if (!page) { try { PK.toast('这一集本身就是直链, 不需要解析线路'); } catch(e){} return; }
+  var url = '';
+  try { url = PK.vipBuild(i, page); } catch(e) {}
+  if (!url) { try { PK.toast('这条线路拼不出地址'); } catch(e){} return; }
+  showWebVip(url, i);
+}
+function showWebVip(url, i){
+  var box = document.getElementById('webvip');
+  if (!box) return;
+  var name = vipName(i);
+  box.innerHTML = '<div class="wvbar"><b>解析线路 ' + esc(name) + '</b>'
+    + '<span class="dim">第三方播放器(窗口内)</span>'
+    + '<button class="ghost mini" onclick="PK.openExternal(' + jsa(url) + ')">新标签打开</button>'
+    + '<button class="ghost mini" onclick="webVipMark(' + i + ',1)">这条能看</button>'
+    + '<button class="ghost mini" onclick="webVipMark(' + i + ',0)">不行</button>'
+    + '<button class="ghost mini" onclick="hideWebVip()">关闭</button></div>'
+    + '<iframe src="' + esc(url) + '" referrerpolicy="no-referrer" allowfullscreen></iframe>';
+  box.style.display = '';
+  try { PK.toast('正在用「' + name + '」解析(出画面一般 5~20 秒)'); } catch(e) {}
+}
+function hideWebVip(){ var b = document.getElementById('webvip'); if (b) { b.style.display = 'none'; b.innerHTML = ''; } }
+function webVipMark(i, ok){
+  try { PK.vipRecord(i, !!ok); } catch(e) {}
+  try { PK.toast(ok ? ('已记住「' + vipName(i) + '」能看, 下次排前面') : ('已记住「' + vipName(i) + '」不行, 下次往后排')); } catch(e) {}
+  try { renderVipPanel(); } catch(e) {}
 }
 /** 用第 i 条 VIP 线路解析"当前这一集背后的平台页面" */
 function vipSniffEp(i){

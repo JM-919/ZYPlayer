@@ -140,6 +140,12 @@
   .eps button.cur{background:var(--grn);color:#07120a;}
   .tag{display:inline-block;font-size:11px;padding:1px 8px;border-radius:99px;background:var(--g1);color:var(--dim);
     margin-right:6px;border:1px solid var(--hair);}
+  /* 网页端解析退路: 顶部一条工具条 + 下面整块 iframe 播放器 */
+  #webvip{position:fixed;left:0;right:0;top:0;bottom:0;z-index:60;background:#0b0f14;}
+  #webvip .wvbar{display:flex;align-items:center;gap:8px;padding:8px 10px;background:#111823;
+    border-bottom:1px solid rgba(255,255,255,.1);font-size:13px;}
+  #webvip .wvbar .dim{color:var(--dim);font-size:12px;margin-right:auto;}
+  #webvip iframe{width:100%;height:calc(100% - 42px);border:0;background:#000;}
   /* 抽屉在网页端(桌面/宽屏)的观感: 鼠标可点、悬停反馈、展开区更宽松 */
   html.web .drwh{cursor:pointer;transition:border-color .15s, background .15s;}
   html.web .drwh:hover{border-color:#3ddc7f;}
@@ -786,6 +792,8 @@
     <div class="cd"><span id="pncd">5</span> 秒后自动播放</div>
     <div class="row"><button class="pbtn" onclick="cancelAutoNext(false)">取消连播</button>
       <button class="pbtn" onclick="playNextNow()">立即播放</button></div></div>
+  <!-- 网页端的解析退路: 把第三方解析页嵌进来自己播(浏览器抓不到流, 但能嵌) -->
+  <div id="webvip" style="display:none"></div>
   <div id="pmask" onclick="closeSheets()"></div>
   <div id="plist"><button class="pclose" onclick="closeSheets()">✕</button><h3>选集 <span class="dim" id="pqInList" onclick="toggleQuality()"
     style="float:right;font-size:12px;font-weight:400;color:#7cc4ff">清晰度/线路</span></h3>
